@@ -1,0 +1,7 @@
+.env
+/venv
+pycache/ 
+*.pyc
+data/
+*.dbf.gz
+.DS_Store

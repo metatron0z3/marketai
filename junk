@@ -1,0 +1,13 @@
+osascript -e 'quit app "Google Chrome"'
+Close other apps (e.g., Finder, IDEs).
+Check Memory:
+bash
+
+Collapse
+
+Wrap
+
+Run
+
+Copy
+top -l 1 | grep PhysMem

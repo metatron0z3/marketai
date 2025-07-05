@@ -1,0 +1,35 @@
+services:
+  questdb:
+    image: questdb/questdb:latest
+    ports:
+      - "9000:9000"  # Web console
+      - "8812:8812"  # PostgreSQL protocol
+    environment:
+      - QDB_PG_USER=admin
+      - QDB_PG_PASSWORD=quest
+    volumes:
+      - questdb_data:/root/.questdb/db
+    healthcheck:
+          test: ["CMD", "nc", "-z", "localhost", "8812"]
+          interval: 15s
+          timeout: 10s
+          retries: 5
+          start_period: 60s  # Increased to allow QuestDB startup
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on: 
+      questdb:
+        condition: service_healthy
+    environment:
+      - QUESTDB_HOST=questdb
+      - QUESTDB_PORT=8812
+      - QUESTDB_USER=admin
+      - QUESTDB_PASSWORD=quest
+      - QUESTDB_DATABASE=questdb
+    volumes:
+      - ./data:/src/data
+volumes:
+  questdb_data:

@@ -1,0 +1,6 @@
+/opt/homebrew/Library/Homebrew/brew.rb (Formulary::FromAPILoader): loading libpq
+/opt/homebrew/Library/Homebrew/brew.rb (Formulary::FromAPILoader): loading libpq
+/opt/homebrew/Library/Homebrew/brew.rb (Cask::CaskLoader::NullLoader): loading libpq
+Warning: libpq 17.5 is already installed and up-to-date.
+To reinstall 17.5, run:
+  brew reinstall libpq
