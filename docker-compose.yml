@@ -1,45 +1,24 @@
+version: '3.8'
 services:
   questdb:
     image: questdb/questdb:latest
     ports:
       - "9000:9000"
       - "8812:8812"
-    environment:
-      - QDB_PG_USER=admin
-      - QDB_PG_PASSWORD=quest
     volumes:
-      - questdb_data:/root/.questdb/db
-    healthcheck:
-      test: ["CMD", "java", "-version"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 2g
+      - questdb_data:/var/lib/questdb
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     depends_on:
-      questdb:
-        condition: service_healthy
+      - questdb
     environment:
       - QUESTDB_HOST=questdb
       - QUESTDB_PORT=8812
-      - QUESTDB_USER=admin
-      - QUESTDB_PASSWORD=quest
-      - QUESTDB_DATABASE=questdb
     volumes:
-      - ./data/tbbo:/src/data/tbbo
-      - ./data/test_data:/src/data/test_data
-    deploy:
-      resources:
-        limits:
-          memory: 1g
+      - .:/src
+      - ./data:/data
+    working_dir: /src/src 
 
 volumes:
-  questdb_data: 
+  questdb_data:

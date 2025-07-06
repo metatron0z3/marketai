@@ -2,4 +2,6 @@ psycopg2-binary==2.9.10
 python-dotenv==1.1.1
 databento==0.36.1
 pandas==2.2.2
-zstd==1.5.5.1
+zstd==1.5.7.2
+requests==2.32.3 
+zstandard==0.22.0
