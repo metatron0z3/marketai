@@ -2,23 +2,23 @@ services:
   questdb:
     image: questdb/questdb:latest
     ports:
-      - "9000:9000"  # Web console
-      - "8812:8812"  # PostgreSQL protocol
+      - "9000:9000"
+      - "8812:8812"
     environment:
       - QDB_PG_USER=admin
       - QDB_PG_PASSWORD=quest
     volumes:
       - questdb_data:/root/.questdb/db
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "8812"]
+      test: ["CMD", "curl", "--fail", "http://localhost:9000/status"]
       interval: 30s
       timeout: 15s
-      retries: 10
-      start_period: 120s
+      retries: 15
+      start_period: 180s
     deploy:
       resources:
         limits:
-          memory: 2g
+          memory: 4g
 
   app:
     build:
