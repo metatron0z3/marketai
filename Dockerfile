@@ -1,16 +1,15 @@
-# Use an official Python runtime as a parent image
 FROM python:3.12-slim
 
-# Set the working directory in the container
 WORKDIR /src
+COPY src/ .
+COPY requirements.txt .
 
-# Copy the current directory contents into the container at /app
-COPY requirements.txt . 
-
-# Install any needed packages specified in requirements.txt
-RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev gcc \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    gcc \
+    libc6-dev \
     && rm -rf /var/lib/apt/lists/*
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src/ . 
 CMD ["python", "local_ingestion.py"]
