@@ -1,24 +1,41 @@
 version: '3.8'
+
 services:
-  questdb:
-    image: questdb/questdb:latest
+  # Your existing ingestion service with QuestDB
+  ingest:
+    build: 
+      context: .
+      dockerfile: Dockerfile.ingest
+    container_name: market_ingest
     ports:
-      - "9000:9000"
-      - "8812:8812"
+      - "9000:9000"  # QuestDB HTTP interface
+      - "9009:9009"  # QuestDB InfluxDB line protocol
+      - "8812:8812"  # QuestDB PostgreSQL wire protocol
     volumes:
       - questdb_data:/var/lib/questdb
+      - ./data:/src/data  # Adjust if you have data volumes
+    networks:
+      - market_network
 
-  app:
-    build: .
+  # New Streamlit service
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: market_streamlit
+    ports:
+      - "8501:8501"
     depends_on:
-      - questdb
+      - ingest
+    networks:
+      - market_network
     environment:
-      - QUESTDB_HOST=questdb
-      - QUESTDB_PORT=8812
-    volumes:
-      - .:/src
-      - ./data:/data
-    working_dir: /src/src 
+      - QUESTDB_HOST=ingestion
+      - QUESTDB_PORT=9000
 
 volumes:
   questdb_data:
+
+networks:
+  market_network:
+    driver: bridge
