@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.12 
+FROM python:3.12-slim
 
 # Set the working directory in the container
 WORKDIR /src
@@ -13,5 +13,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev gcc \
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ . 
-COPY data/ ./data/
 CMD ["python", "local_ingestion.py"]

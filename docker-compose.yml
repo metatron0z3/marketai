@@ -10,11 +10,15 @@ services:
     volumes:
       - questdb_data:/root/.questdb/db
     healthcheck:
-          test: ["CMD", "nc", "-z", "localhost", "8812"]
-          interval: 15s
-          timeout: 10s
-          retries: 5
-          start_period: 60s  # Increased to allow QuestDB startup
+      test: ["CMD", "nc", "-z", "localhost", "8812"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
 
   app:
     build:
@@ -30,6 +34,11 @@ services:
       - QUESTDB_PASSWORD=quest
       - QUESTDB_DATABASE=questdb
     volumes:
-      - ./data:/src/data
+      - ./data/tbbo:/src/data/tbbo
+      - ./data/test_data:/src/data/test_data
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 volumes:
-  questdb_data:
+  questdb_data: 

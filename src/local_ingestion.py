@@ -2,8 +2,6 @@ import databento as db
 import pandas as pd
 import psycopg2
 from config import Config
-import time
-import zipfile
 import os
 import tempfile
 import zstd
@@ -69,6 +67,9 @@ def create_tbbo_table(conn):
 def insert_tbbo_data(conn, df):
     """Insert TBBO data into QuestDB."""
     logging.info(f"Inserting {len(df)} records into tbbo_data...")
+    if df.empty:
+        logging.warning("DataFrame is empty, skipping insert.")
+        return
     with conn.cursor() as cursor:
         for _, row in df.iterrows():
             cursor.execute(
@@ -79,7 +80,7 @@ def insert_tbbo_data(conn, df):
                     sequence, bid_px_00, ask_px_00, bid_sz_00, ask_sz_00,
                     bid_ct_00, ask_ct_00, symbol
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-            """,
+                """,
                 (
                     pd.Timestamp(row["ts_recv"]).to_pydatetime()
                     if pd.notnull(row["ts_recv"])
@@ -108,7 +109,7 @@ def insert_tbbo_data(conn, df):
                 ),
             )
         conn.commit()
-    logging.info(f"Inserted {len(df)} records.")
+    logging.info(f"Inserted {len(df)} records for symbols: {df['symbol'].unique()}")
 
 
 def decompress_zst(zst_path, output_path):
@@ -124,9 +125,12 @@ def decompress_zst(zst_path, output_path):
         raise
 
 
-def process_tbbo_file(file_path):
-    """Read and process the compressed DBF file."""
-    logging.info(f"Processing ZIP file: {file_path}")
+def process_single_tbbo_file(zst_path):
+    """Process a single .dbn.zst file."""
+    logging.info(f"Processing single .dbn.zst file: {zst_path}")
+    if not os.path.exists(zst_path):
+        logging.error(f"File not found: {zst_path}")
+        raise FileNotFoundError(f"File not found: {zst_path}")
     if not test_questdb_connection():
         raise Exception("Cannot proceed without QuestDB connection.")
 
@@ -140,54 +144,45 @@ def process_tbbo_file(file_path):
     try:
         create_tbbo_table(conn)
 
-        # Extract ZIP file
-        logging.info("Extracting ZIP file...")
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            with zipfile.ZipFile(file_path, "r") as zip_ref:
-                zip_ref.extractall(tmpdirname)
-                logging.info(f"Extracted ZIP to {tmpdirname}")
-                # Process one .dbn.zst file for testing
-                zst_files = [
-                    f for f in os.listdir(tmpdirname) if f.endswith(".dbn.zst")
-                ][:1]
-                logging.info(f"Found {len(zst_files)} .dbn.zst files: {zst_files}")
-                for zst_file in zst_files:
-                    zst_path = os.path.join(tmpdirname, zst_file)
-                    dbn_path = os.path.join(tmpdirname, zst_file.replace(".zst", ""))
-                    decompress_zst(zst_path, dbn_path)
+        # Decompress the .zst file
+        with tempfile.NamedTemporaryFile(suffix=".dbn", delete=False) as tmp_dbn:
+            dbn_path = tmp_dbn.name
+            decompress_zst(zst_path, dbn_path)
 
-                    # Read DBN file using databento
-                    logging.info(f"Reading DBN file: {dbn_path}")
-                    try:
-                        dbf = db.DBNStore.from_file(dbn_path)
-                        chunk_size = 500  # Further reduced
-                        for chunk in dbf.to_df(
-                            chunks=chunk_size, symbols=["SPY", "QQQ", "TSLA"]
-                        ):
-                            insert_tbbo_data(conn, chunk)
-                        os.remove(dbn_path)
-                        logging.info(f"Processed and removed {dbn_path}")
-                    except Exception as e:
-                        logging.error(f"Failed to process {zst_file}: {e}")
-                        continue
+            # Read DBN file using databento
+            logging.info(f"Reading DBN file: {dbn_path}")
+            try:
+                dbf = db.DBNStore.from_file(dbn_path)
+                chunk_size = 25  # Reduced for debugging
+                for chunk in dbf.to_df(
+                    chunks=chunk_size, symbols=["SPY", "QQQ", "TSLA"]
+                ):
+                    logging.info(
+                        f"Processing chunk with {len(chunk)} rows, symbols: {chunk['symbol'].unique()}"
+                    )
+                    insert_tbbo_data(conn, chunk)
+                logging.info(f"Processed {dbn_path}")
+            finally:
+                os.remove(dbn_path)
+                logging.info(f"Removed temporary file {dbn_path}")
+    except Exception as e:
+        logging.error(f"Failed to process {zst_path}: {e}")
+        raise
     finally:
         conn.close()
         logging.info("Closed QuestDB connection.")
 
 
 def main():
-    """Main function to ingest TBBO data."""
-    logging.info("Starting TBBO data ingestion...")
-    file_path = (
-        "data/tbbo/XNAS-20250630-3K464RPTEN.zip"
-        if os.path.exists("data/tbbo/XNAS-20250630-3K464RPTEN.zip")
-        else "/src/data/tbbo/XNAS-20250630-3K464RPTEN.zip"
-    )
-    if not os.path.exists(file_path):
-        logging.error(f"ZIP file not found at {file_path}")
-        raise FileNotFoundError(f"ZIP file not found at {file_path}")
-    process_tbbo_file(file_path)
-    logging.info("TBBO data ingestion completed.")
+    """Main function to test ingestion of a single TBBO file."""
+    logging.info("Starting single TBBO file ingestion...")
+    test_file = "data/test_data/xnas-itch-20240102.trades.dbn.zst"
+    if not os.path.exists(test_file):
+        logging.error(f"Test file not found: {test_file}")
+        raise FileNotFoundError(f"Test file not found: {test_file}")
+    logging.info(f"Testing ingestion with file: {test_file}")
+    process_single_tbbo_file(test_file)
+    logging.info("Single TBBO file ingestion completed.")
 
 
 if __name__ == "__main__":
