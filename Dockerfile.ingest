@@ -17,12 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# Copy the startup script
-COPY start.sh .
-RUN chmod +x start.sh
-
 # Expose Streamlit port
 EXPOSE 8501
 
 # Use the startup script to run both services
-CMD ["./start.sh"]
+CMD ["python", "ingest_cli.py"]

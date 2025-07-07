@@ -13,7 +13,11 @@ st.set_page_config(page_title="Market Data Viewer", page_icon="📈", layout="wi
 SYMBOLS = {"SPY": 15144, "QQQ": 13340, "TSLA": 16244}
 
 # Get QuestDB host from environment or use default
-QUESTDB_HOST = os.getenv("QUESTDB_HOST", "ingestion")
+# QUESTDB_HOST = os.getenv("QUESTDB_HOST", "ingestion")
+# QUESTDB_PORT = os.getenv("QUESTDB_PORT", "9000")
+# QUESTDB_URL = f"http://{QUESTDB_HOST}:{QUESTDB_PORT}/exec"
+
+QUESTDB_HOST = os.getenv("QUESTDB_HOST", "questdb")
 QUESTDB_PORT = os.getenv("QUESTDB_PORT", "9000")
 QUESTDB_URL = f"http://{QUESTDB_HOST}:{QUESTDB_PORT}/exec"
 

@@ -1,19 +1,25 @@
 version: '3.8'
 
 services:
-  # Your existing ingestion service with QuestDB
+  questdb:
+    image: questdb/questdb:latest
+    ports:
+      - "9000:9000"   # HTTP API port
+      - "8812:8812"   # PostgreSQL wire protocol
+    volumes:
+      - questdb-data:/var/lib/questdb
+    networks:
+      - market_network
+  
   ingest:
     build: 
       context: .
       dockerfile: Dockerfile.ingest
-    container_name: market_ingest
-    ports:
-      - "9000:9000"  # QuestDB HTTP interface
-      - "9009:9009"  # QuestDB InfluxDB line protocol
-      - "8812:8812"  # QuestDB PostgreSQL wire protocol
+    container_name: market_ingest 
     volumes:
-      - questdb_data:/var/lib/questdb
       - ./data:/src/data  # Adjust if you have data volumes
+    depends_on:
+      - questdb
     networks:
       - market_network
 
@@ -27,14 +33,15 @@ services:
       - "8501:8501"
     depends_on:
       - ingest
+      - questdb
     networks:
       - market_network
     environment:
-      - QUESTDB_HOST=ingestion
+      - QUESTDB_HOST=questdb
       - QUESTDB_PORT=9000
 
 volumes:
-  questdb_data:
+  questdb-data:
 
 networks:
   market_network:
