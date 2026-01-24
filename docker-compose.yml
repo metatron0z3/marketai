@@ -59,23 +59,6 @@ services:
       - QUESTDB_HOST=questdb
       - QUESTDB_PORT=9000
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: market_frontend
-    ports:
-      - "4200:80"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules # Anonymous volume to prevent host node_modules from overwriting container's
-    depends_on:
-      - backend
-    networks:
-      - market_network
-    environment:
-      - API_BASE_URL=http://backend:8000/api/v1
-
 
 volumes:
   questdb-data:

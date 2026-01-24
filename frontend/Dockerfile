@@ -13,6 +13,7 @@ RUN npm install
 COPY . .
 
 # Build the Angular application for production
+
 RUN npm run build -- --configuration production
 
 # Stage 2: Production

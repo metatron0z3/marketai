@@ -30,32 +30,8 @@
   <div *ngIf="loading" class="loading">Loading market data...</div>
   <div *ngIf="error" class="error">{{ error }}</div>
 
-  <div *ngIf="!loading && !error && marketData.length > 0" class="data-table">
-    <h2>Market Data</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Timestamp</th>
-          <th>Instrument ID</th>
-          <th>Bid</th>
-          <th>Ask</th>
-          <th>Mid Price</th>
-          <th>Bid Size</th>
-          <th>Ask Size</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let data of marketData">
-          <td>{{ data.timestamp | date:'medium' }}</td>
-          <td>{{ data.instrument_id }}</td>
-          <td>{{ data.bid | number:'1.2-2' }}</td>
-          <td>{{ data.ask | number:'1.2-2' }}</td>
-          <td>{{ data.mid_price | number:'1.2-2' }}</td>
-          <td>{{ data.bid_size }}</td>
-          <td>{{ data.ask_size }}</td>
-        </tr>
-      </tbody>
-    </table>
+  <div *ngIf="!loading && !error && marketData.length > 0">
+    <app-test-render></app-test-render>
   </div>
 
   <div *ngIf="!loading && !error && marketData.length === 0">

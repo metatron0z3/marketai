@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterOutlet } from '@angular/router';
 import { ApiService } from './core/services/api.service';
+import { TestRender } from './components/test-render/test-render'; // Corrected import
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterOutlet],
+  imports: [CommonModule, FormsModule, RouterOutlet, TestRender], // Corrected usage
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
@@ -29,27 +30,33 @@ export class App implements OnInit {
   }
 
   fetchInstruments(): void {
+    console.log('Fetching instruments...');
     this.apiService.getInstruments().subscribe({
       next: (data) => {
         this.instruments = data;
+        console.log('Instruments fetched:', this.instruments);
         if (this.instruments.length > 0) {
           this.selectedInstrumentId = this.instruments[0].id;
+          console.log('Selected instrument ID:', this.selectedInstrumentId);
           this.fetchMarketData();
         }
       },
       error: (err) => {
         console.error('Error fetching instruments:', err);
         this.error = 'Failed to load instruments.';
+        console.log('Error state:', this.error);
       }
     });
   }
 
   fetchMarketData(): void {
     if (!this.selectedInstrumentId) {
+      console.log('No instrument selected, skipping market data fetch.');
       return;
     }
     this.loading = true;
     this.error = null;
+    console.log('Fetching market data for instrument:', this.selectedInstrumentId, 'timeframe:', this.selectedTimeframe);
 
     this.apiService.getMarketData(
       this.selectedInstrumentId,
@@ -60,11 +67,16 @@ export class App implements OnInit {
       next: (data) => {
         this.marketData = data;
         this.loading = false;
+        console.log('Market data fetched:', this.marketData);
+        console.log('Loading state:', this.loading);
+        console.log('Chart render conditions - loading:', this.loading, 'error:', this.error, 'marketData.length:', this.marketData.length);
       },
       error: (err) => {
         console.error('Error fetching market data:', err);
         this.error = 'Failed to load market data.';
         this.loading = false;
+        console.log('Error state:', this.error);
+        console.log('Loading state:', this.loading);
       }
     });
   }
