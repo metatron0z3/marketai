@@ -59,6 +59,18 @@ services:
       - QUESTDB_HOST=questdb
       - QUESTDB_PORT=9000
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: market_frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+    networks:
+      - market_network
+
 
 volumes:
   questdb-data:

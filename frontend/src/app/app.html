@@ -30,11 +30,13 @@
   <div *ngIf="loading" class="loading">Loading market data...</div>
   <div *ngIf="error" class="error">{{ error }}</div>
 
-  <div *ngIf="!loading && !error && marketData.length > 0">
-    <app-test-render></app-test-render>
+  <div *ngIf="!loading && !error && marketData && marketData.length > 0">
+    <h2>Chart Visualization</h2>
+    <p>Loaded {{ marketData.length }} data points</p>
+    <app-test-render [marketData]="marketData"></app-test-render>
   </div>
 
-  <div *ngIf="!loading && !error && marketData.length === 0">
+  <div *ngIf="!loading && !error && (!marketData || marketData.length === 0)">
     No market data available for the selected criteria.
   </div>
 </div>

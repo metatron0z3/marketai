@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterOutlet } from '@angular/router';
@@ -23,7 +23,10 @@ export class App implements OnInit {
   loading: boolean = false;
   error: string | null = null;
 
-  constructor(private apiService: ApiService) {} // Inject ApiService
+  constructor(
+    private apiService: ApiService,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
     this.fetchInstruments();
@@ -38,6 +41,7 @@ export class App implements OnInit {
         if (this.instruments.length > 0) {
           this.selectedInstrumentId = this.instruments[0].id;
           console.log('Selected instrument ID:', this.selectedInstrumentId);
+          this.cdr.detectChanges();
           this.fetchMarketData();
         }
       },
@@ -45,6 +49,7 @@ export class App implements OnInit {
         console.error('Error fetching instruments:', err);
         this.error = 'Failed to load instruments.';
         console.log('Error state:', this.error);
+        this.cdr.detectChanges();
       }
     });
   }
@@ -56,6 +61,7 @@ export class App implements OnInit {
     }
     this.loading = true;
     this.error = null;
+    this.cdr.detectChanges();
     console.log('Fetching market data for instrument:', this.selectedInstrumentId, 'timeframe:', this.selectedTimeframe);
 
     this.apiService.getMarketData(
@@ -70,6 +76,7 @@ export class App implements OnInit {
         console.log('Market data fetched:', this.marketData);
         console.log('Loading state:', this.loading);
         console.log('Chart render conditions - loading:', this.loading, 'error:', this.error, 'marketData.length:', this.marketData.length);
+        this.cdr.detectChanges();
       },
       error: (err) => {
         console.error('Error fetching market data:', err);
@@ -77,31 +84,28 @@ export class App implements OnInit {
         this.loading = false;
         console.log('Error state:', this.error);
         console.log('Loading state:', this.loading);
+        this.cdr.detectChanges();
       }
     });
   }
 
-  onInstrumentChange(event: Event): void {
-    const target = event.target as HTMLSelectElement;
-    this.selectedInstrumentId = Number(target.value);
+  onInstrumentChange(value: number): void {
+    this.selectedInstrumentId = value;
     this.fetchMarketData();
   }
 
-  onTimeframeChange(event: Event): void {
-    const target = event.target as HTMLSelectElement;
-    this.selectedTimeframe = target.value;
+  onTimeframeChange(value: string): void {
+    this.selectedTimeframe = value;
     this.fetchMarketData();
   }
 
-  onStartDateChange(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.startDate = target.value;
+  onStartDateChange(value: string): void {
+    this.startDate = value;
     this.fetchMarketData();
   }
 
-  onEndDateChange(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.endDate = target.value;
+  onEndDateChange(value: string): void {
+    this.endDate = value;
     this.fetchMarketData();
   }
 }

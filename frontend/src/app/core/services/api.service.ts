@@ -14,7 +14,7 @@ export class ApiService {
   }
 
   getInstruments(): Observable<any[]> {
-    return this.http.get<any[]>(`${this.apiUrl}/instruments`);
+    return this.http.get<any[]>(`${this.apiUrl}/instruments/`);
   }
 
   getMarketData(instrumentId: number, timeframe: string, startDate?: string, endDate?: string): Observable<any[]> {
@@ -29,6 +29,6 @@ export class ApiService {
       params = params.set('end_date', endDate);
     }
 
-    return this.http.get<any[]>(`${this.apiUrl}/market-data`, { params });
+    return this.http.get<any[]>(`${this.apiUrl}/market-data/`, { params });
   }
 }

@@ -1,2 +1,3 @@
 export const production = false;
-export const API_BASE_URL = 'http://localhost:8000/api/v1';
+// Use relative URL so nginx can proxy to backend container
+export const API_BASE_URL = '/api/v1';
