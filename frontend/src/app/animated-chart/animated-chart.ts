@@ -25,7 +25,7 @@ export class AnimatedChartComponent implements AfterViewInit, OnDestroy {
   private chart!: IChartApi;
   private candlestickSeries!: ISeriesApi<'Candlestick'>;
   private wsSubscription!: Subscription;
-  private lastCandle: ChartCandle | null = null;
+  private candles: ChartCandle[] = []; // Accumulate candles for replay
 
   constructor(private websocketService: WebsocketService) {}
 
@@ -93,34 +93,20 @@ export class AnimatedChartComponent implements AfterViewInit, OnDestroy {
         }
         const chartTime: Time = Math.floor(new Date(tick.timestamp).getTime() / 1000) as Time;
 
-        if (tick.isFinal) {
-          const newCandle: ChartCandle = {
-            time: chartTime,
-            open: tick.open,
-            high: tick.high,
-            low: tick.low,
-            close: tick.close,
-          };
-          this.candlestickSeries.update(newCandle);
-          this.lastCandle = newCandle;
-        } else {
-          if (this.lastCandle && this.lastCandle.time === chartTime) {
-            this.lastCandle.high = Math.max(this.lastCandle.high, tick.high);
-            this.lastCandle.low = Math.min(this.lastCandle.low, tick.low);
-            this.lastCandle.close = tick.close;
-            this.candlestickSeries.update(this.lastCandle);
-          } else {
-            const newCandle: ChartCandle = {
-              time: chartTime,
-              open: tick.open,
-              high: tick.high,
-              low: tick.low,
-              close: tick.close,
-            };
-            this.candlestickSeries.update(newCandle);
-            this.lastCandle = newCandle;
-          }
-        }
+        const newCandle: ChartCandle = {
+          time: chartTime,
+          open: tick.open,
+          high: tick.high,
+          low: tick.low,
+          close: tick.close,
+        };
+
+        // Add candle to array and use setData for historical replay
+        this.candles.push(newCandle);
+        this.candlestickSeries.setData(this.candles);
+
+        // Auto-scroll to show latest candle
+        this.chart.timeScale().scrollToRealTime();
       },
       error: (err: any) => console.error('WebSocket error in component:', err),
       complete: () => console.log('WebSocket stream completed in component'),
