@@ -30,16 +30,19 @@ interface IngestionJob {
 export class IngestPage implements OnInit, OnDestroy {
   availableTables = ['trades_data'];
   selectedTable: string = 'trades_data';
-  selectedFile: File | null = null;
-  selectedFileName: string = '';
 
-  jobs: IngestionJob[] = [];
-  isUploading: boolean = false;
+  // Batch upload state
+  selectedFiles: File[] = [];
+  totalSize: number = 0;
+  isProcessing: boolean = false;
+  currentFileIndex: number = 0;
+  currentFileName: string = '';
   uploadProgress: number = 0;
+  completedFiles: number = 0;
   error: string | null = null;
 
+  jobs: IngestionJob[] = [];
   private pollSubscription: Subscription | null = null;
-  private activeJobIds: Set<string> = new Set();
 
   constructor(private apiService: ApiService) {}
 
@@ -53,19 +56,11 @@ export class IngestPage implements OnInit, OnDestroy {
   }
 
   startPolling(): void {
-    // Poll every 2 seconds for active jobs
     this.pollSubscription = interval(2000).pipe(
       switchMap(() => this.apiService.getIngestionJobs())
     ).subscribe({
       next: (jobs) => {
         this.jobs = jobs;
-        // Track active jobs
-        this.activeJobIds.clear();
-        jobs.forEach(job => {
-          if (job.status === 'uploading' || job.status === 'processing' || job.status === 'pending') {
-            this.activeJobIds.add(job.id);
-          }
-        });
       },
       error: (err) => {
         console.error('Error polling jobs:', err);
@@ -80,60 +75,100 @@ export class IngestPage implements OnInit, OnDestroy {
     }
   }
 
-  onFileSelected(event: Event): void {
+  onFolderSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
-      this.selectedFile = input.files[0];
-      this.selectedFileName = this.selectedFile.name;
+      // Filter for .dbn.zst files only
+      const allFiles = Array.from(input.files);
+      this.selectedFiles = allFiles.filter(file => file.name.endsWith('.dbn.zst'));
+
+      // Sort by filename for consistent ordering
+      this.selectedFiles.sort((a, b) => a.name.localeCompare(b.name));
+
+      // Calculate total size
+      this.totalSize = this.selectedFiles.reduce((sum, file) => sum + file.size, 0);
+
       this.error = null;
 
-      // Validate file extension
-      if (!this.selectedFileName.endsWith('.dbn.zst') &&
-          !this.selectedFileName.endsWith('.zip')) {
-        this.error = 'Invalid file type. Please select a .dbn.zst or .zip file';
-        this.selectedFile = null;
-        this.selectedFileName = '';
+      if (this.selectedFiles.length === 0) {
+        this.error = 'No .dbn.zst files found in the selected folder';
+      } else {
+        console.log(`Selected ${this.selectedFiles.length} .dbn.zst files (${this.formatBytes(this.totalSize)})`);
       }
     }
   }
 
-  async uploadAndIngest(): Promise<void> {
-    if (!this.selectedFile) {
-      this.error = 'Please select a file first';
+  clearSelection(): void {
+    this.selectedFiles = [];
+    this.totalSize = 0;
+    this.error = null;
+    // Reset the file input
+    const input = document.getElementById('folder-input') as HTMLInputElement;
+    if (input) {
+      input.value = '';
+    }
+  }
+
+  async startBatchUpload(): Promise<void> {
+    if (this.selectedFiles.length === 0) {
+      this.error = 'No files selected';
       return;
     }
 
-    this.isUploading = true;
-    this.uploadProgress = 0;
+    this.isProcessing = true;
+    this.completedFiles = 0;
     this.error = null;
 
-    try {
-      const formData = new FormData();
-      formData.append('file', this.selectedFile);
-      formData.append('table', this.selectedTable);
-
-      // Upload file - this will return quickly once upload completes
-      let lastProgress = 0;
-      await this.apiService.uploadAndIngest(formData, (progress) => {
-        this.uploadProgress = progress;
-        lastProgress = progress;
-      }).toPromise();
-
-      console.log('Upload complete, processing started in background');
-
-      // Reset form
-      this.selectedFile = null;
-      this.selectedFileName = '';
+    for (let i = 0; i < this.selectedFiles.length; i++) {
+      const file = this.selectedFiles[i];
+      this.currentFileIndex = i;
+      this.currentFileName = file.name;
       this.uploadProgress = 0;
 
-      // The polling interval will automatically update the jobs list
-
-    } catch (err: any) {
-      this.error = err.error?.detail || 'Failed to upload file';
-      console.error('Upload error:', err);
-    } finally {
-      this.isUploading = false;
+      try {
+        await this.uploadSingleFile(file);
+        this.completedFiles++;
+        console.log(`Completed ${this.completedFiles}/${this.selectedFiles.length}: ${file.name}`);
+      } catch (err: any) {
+        console.error(`Failed to upload ${file.name}:`, err);
+        this.error = `Failed on ${file.name}: ${err.error?.detail || err.message || 'Unknown error'}`;
+        // Continue with next file instead of stopping entirely
+        this.completedFiles++;
+      }
     }
+
+    this.isProcessing = false;
+    this.currentFileName = '';
+    this.uploadProgress = 0;
+
+    if (!this.error) {
+      console.log('Batch upload complete!');
+    }
+  }
+
+  private uploadSingleFile(file: File): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('table', this.selectedTable);
+
+      this.apiService.uploadAndIngest(formData, (progress) => {
+        this.uploadProgress = progress;
+      }).subscribe({
+        next: (result) => {
+          if (result !== null) {
+            // Response received
+            resolve();
+          }
+        },
+        error: (err) => {
+          reject(err);
+        },
+        complete: () => {
+          resolve();
+        }
+      });
+    });
   }
 
   loadJobs(): void {
@@ -182,5 +217,13 @@ export class IngestPage implements OnInit, OnDestroy {
 
   formatNumber(num: number): string {
     return num.toLocaleString();
+  }
+
+  formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 }

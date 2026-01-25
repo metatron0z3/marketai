@@ -2,12 +2,12 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
-import { TestRender } from '../../components/test-render/test-render';
+import { ChartComponent } from '../../components/chart/chart';
 
 @Component({
   selector: 'app-market-data',
   standalone: true,
-  imports: [CommonModule, FormsModule, TestRender],
+  imports: [CommonModule, FormsModule, ChartComponent],
   templateUrl: './market-data.html',
   styleUrl: './market-data.scss'
 })

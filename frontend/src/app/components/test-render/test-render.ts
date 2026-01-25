@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, Input } from '@angular/core';
 
 @Component({
   selector: 'app-test-render',
@@ -7,5 +7,5 @@ import { Component } from '@angular/core';
   styleUrl: './test-render.scss',
 })
 export class TestRender {
-
+  @Input() marketData: any[] = [];
 }

@@ -42,7 +42,7 @@
       <p class="date-range">{{ formatDateRange() }}</p>
       <p class="data-count">{{ marketData.length }} data points</p>
     </div>
-    <app-test-render [marketData]="marketData"></app-test-render>
+    <app-chart [data]="marketData"></app-chart>
   </div>
 
   <div *ngIf="!loading && !error && (!marketData || marketData.length === 0)">
