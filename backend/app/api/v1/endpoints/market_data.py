@@ -1,8 +1,8 @@
 import logging
-import json
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict, Optional, Union
-from datetime import date
+from datetime import date, datetime
+from ....core.db import get_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -15,44 +15,89 @@ async def get_market_data(
     timeframe: str = Query(
         "5min", description="Aggregation timeframe: '5min', '1hour', or '1day'"
     ),
-    start_date: Optional[date] = Query(
+    start_date: Optional[str] = Query(
         None, description="Start date for filtering (YYYY-MM-DD)"
     ),
-    end_date: Optional[date] = Query(
+    end_date: Optional[str] = Query(
         None, description="End date for filtering (YYYY-MM-DD)"
     ),
 ) -> List[Dict[str, Union[str, int, float, None]]]:
     """
-    Fetch market data from a static JSON file based on instrument.
+    Fetch aggregated OHLCV market data from QuestDB based on instrument and timeframe.
     """
     try:
+        # Map timeframe to sample interval
+        timeframe_map = {
+            "5min": "5m",
+            "1hour": "1h",
+            "1day": "1d"
+        }
+
+        sample_interval = timeframe_map.get(timeframe, "5m")
+
         logger.info(
-            f"Fetching market data for instrument {instrument_id} with timeframe {timeframe} from static JSON."
+            f"Fetching market data from QuestDB: instrument={instrument_id}, "
+            f"timeframe={timeframe}, start={start_date}, end={end_date}"
         )
 
-        # Path to the static JSON file
-        json_file_path = "app/models/static_data/ohlcv_data.json"
+        # Build the query
+        query = f"""
+        SELECT
+            ts_event as timestamp,
+            instrument_id,
+            first(price) as open,
+            max(price) as high,
+            min(price) as low,
+            last(price) as close,
+            sum(size) as volume
+        FROM trades_data
+        WHERE instrument_id = {instrument_id}
+        """
 
-        with open(json_file_path, 'r') as f:
-            data = json.load(f)
+        # Add date filters if provided
+        if start_date:
+            query += f" AND ts_event >= '{start_date}T00:00:00.000000Z'"
+        if end_date:
+            query += f" AND ts_event <= '{end_date}T23:59:59.999999Z'"
 
-        if not data:
-            logger.info("Static JSON is empty.")
-            return []
+        query += f"""
+        SAMPLE BY {sample_interval}
+        ALIGN TO CALENDAR
+        """
 
-        # Filter by instrument_id
-        filtered_data = [record for record in data if record.get('instrument_id') == instrument_id]
+        logger.info(f"Executing query: {query}")
 
-        if not filtered_data:
-            logger.info(f"No market data found for instrument {instrument_id} in static JSON.")
-            return []
+        # Execute query
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(query)
 
-        logger.info(f"Returning {len(filtered_data)} records of market data from static JSON.")
-        return filtered_data
+        # Fetch results
+        columns = [desc[0] for desc in cursor.description]
+        rows = cursor.fetchall()
 
-    except FileNotFoundError:
-        logger.exception("The ohlcv_data.json file was not found.")
-        raise HTTPException(status_code=404, detail="Market data file not found.")
+        cursor.close()
+        conn.close()
+
+        # Convert to list of dictionaries
+        result = []
+        for row in rows:
+            record = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                # Convert timestamp to ISO string if it's a datetime
+                if col == 'timestamp' and value:
+                    if isinstance(value, datetime):
+                        record[col] = value.isoformat() + 'Z'
+                    else:
+                        record[col] = str(value)
+                else:
+                    record[col] = value
+            result.append(record)
+
+        logger.info(f"Returning {len(result)} aggregated OHLCV records from QuestDB")
+        return result
+
     except Exception as e:
-        logger.exception("Error fetching market data from static JSON:")
-        raise HTTPException(status_code=500, detail="Internal server error.")
+        logger.exception(f"Error fetching market data from QuestDB: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")

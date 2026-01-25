@@ -4,3 +4,6 @@ psycopg2-binary==2.9.10
 pandas==2.2.2
 gunicorn==22.0.0
 sqlalchemy
+databento
+requests
+python-multipart

@@ -1,0 +1,122 @@
+<div class="ingest-container">
+  <h1>Data Ingestion</h1>
+
+  <div class="upload-section">
+    <h2>Upload and Ingest Data</h2>
+
+    <div class="upload-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="table-select">Target Table:</label>
+          <select id="table-select" [(ngModel)]="selectedTable" [disabled]="isUploading">
+            <option *ngFor="let table of availableTables" [value]="table">{{ table }}</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group file-input-group">
+          <label for="file-input">Data File (.dbn.zst or .zip):</label>
+          <div class="file-input-wrapper">
+            <input
+              type="file"
+              id="file-input"
+              (change)="onFileSelected($event)"
+              accept=".dbn.zst,.zip"
+              [disabled]="isUploading"
+            />
+            <div class="file-name" *ngIf="selectedFileName">
+              Selected: <strong>{{ selectedFileName }}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <button
+          class="upload-button"
+          (click)="uploadAndIngest()"
+          [disabled]="!selectedFile || isUploading"
+        >
+          {{ isUploading ? 'Uploading...' : 'Upload and Ingest' }}
+        </button>
+      </div>
+
+      <div *ngIf="isUploading" class="progress-bar">
+        <div class="progress-fill" [style.width.%]="uploadProgress"></div>
+        <span class="progress-text">{{ uploadProgress }}%</span>
+      </div>
+
+      <div *ngIf="error" class="error-message">
+        {{ error }}
+      </div>
+    </div>
+  </div>
+
+  <div class="jobs-section">
+    <div class="section-header">
+      <h2>Ingestion Jobs</h2>
+      <button class="refresh-button" (click)="refreshJobs()" [disabled]="isUploading">
+        Refresh
+      </button>
+    </div>
+
+    <div *ngIf="jobs.length === 0" class="no-jobs">
+      No ingestion jobs yet. Upload a file to get started.
+    </div>
+
+    <table *ngIf="jobs.length > 0" class="jobs-table">
+      <thead>
+        <tr>
+          <th>Filename</th>
+          <th>Table</th>
+          <th>Status</th>
+          <th>Progress</th>
+          <th>Records</th>
+          <th>Duration</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let job of jobs" [class]="getStatusClass(job.status)">
+          <td class="filename">
+            {{ job.filename }}
+            <div *ngIf="job.currentFile" class="current-file">
+              {{ job.currentFile }}
+            </div>
+          </td>
+          <td>{{ job.table }}</td>
+          <td>
+            <span class="status-badge" [class]="getStatusClass(job.status)">
+              {{ job.status }}
+            </span>
+          </td>
+          <td>
+            <div class="job-progress">
+              <div class="job-progress-bar">
+                <div class="job-progress-fill" [style.width.%]="job.progress"></div>
+              </div>
+              <span class="job-progress-text">{{ job.progress }}%</span>
+            </div>
+          </td>
+          <td class="records">
+            <span *ngIf="job.totalRecords > 0">
+              {{ formatNumber(job.recordsProcessed) }} / {{ formatNumber(job.totalRecords) }}
+            </span>
+            <span *ngIf="job.totalRecords === 0">
+              {{ formatNumber(job.recordsProcessed) }}
+              <span *ngIf="job.totalFiles && job.totalFiles > 0" class="file-count">
+                ({{ job.totalFiles }} files)
+              </span>
+            </span>
+          </td>
+          <td>{{ formatDuration(job.startTime, job.endTime) }}</td>
+          <td class="error-cell">
+            <span *ngIf="job.error" class="error-text">{{ job.error }}</span>
+            <span *ngIf="!job.error">-</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

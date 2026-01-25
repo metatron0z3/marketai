@@ -1,0 +1,316 @@
+.ingest-container {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+h1 {
+  color: #333;
+  margin-bottom: 30px;
+}
+
+h2 {
+  color: #555;
+  margin-bottom: 15px;
+  font-size: 18px;
+}
+
+.upload-section {
+  background: #f9f9f9;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  border: 1px solid #e0e0e0;
+}
+
+.upload-form {
+  max-width: 600px;
+}
+
+.form-row {
+  margin-bottom: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+label {
+  margin-bottom: 8px;
+  font-weight: bold;
+  color: #555;
+  font-size: 14px;
+}
+
+select {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: white;
+  cursor: pointer;
+}
+
+select:disabled {
+  background-color: #f0f0f0;
+  cursor: not-allowed;
+}
+
+.file-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+input[type="file"] {
+  padding: 10px;
+  border: 2px dashed #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  background-color: white;
+}
+
+input[type="file"]:disabled {
+  background-color: #f0f0f0;
+  cursor: not-allowed;
+}
+
+.file-name {
+  padding: 10px;
+  background-color: #e8f4f8;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #333;
+}
+
+.upload-button {
+  padding: 12px 30px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.upload-button:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.upload-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.progress-bar {
+  position: relative;
+  width: 100%;
+  height: 30px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 15px;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #007bff;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: bold;
+  color: #333;
+  font-size: 14px;
+}
+
+.error-message {
+  margin-top: 15px;
+  padding: 12px;
+  background-color: #ffe0b2;
+  color: #ff5722;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.jobs-section {
+  margin-top: 30px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.refresh-button {
+  padding: 8px 16px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+.refresh-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.no-jobs {
+  padding: 30px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+}
+
+.jobs-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: white;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.jobs-table thead {
+  background-color: #f2f2f2;
+}
+
+.jobs-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: bold;
+  color: #555;
+  font-size: 14px;
+  border-bottom: 2px solid #ddd;
+}
+
+.jobs-table td {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  font-size: 14px;
+}
+
+.jobs-table tr:last-child td {
+  border-bottom: none;
+}
+
+.filename {
+  font-family: monospace;
+  color: #333;
+}
+
+.current-file {
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.file-count {
+  font-size: 11px;
+  color: #999;
+  margin-left: 4px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.status-uploading .status-badge,
+.status-badge.status-uploading {
+  background-color: #6c757d;
+  color: #fff;
+}
+
+.status-pending .status-badge,
+.status-badge.status-pending {
+  background-color: #ffc107;
+  color: #fff;
+}
+
+.status-processing .status-badge,
+.status-badge.status-processing {
+  background-color: #17a2b8;
+  color: #fff;
+}
+
+.status-completed .status-badge,
+.status-badge.status-completed {
+  background-color: #28a745;
+  color: #fff;
+}
+
+.status-failed .status-badge,
+.status-badge.status-failed {
+  background-color: #dc3545;
+  color: #fff;
+}
+
+.job-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.job-progress-bar {
+  flex: 1;
+  height: 20px;
+  background-color: #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.job-progress-fill {
+  height: 100%;
+  background-color: #007bff;
+  transition: width 0.3s ease;
+}
+
+.job-progress-text {
+  font-size: 12px;
+  color: #666;
+  min-width: 40px;
+}
+
+.records {
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.error-cell {
+  max-width: 200px;
+}
+
+.error-text {
+  color: #dc3545;
+  font-size: 12px;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

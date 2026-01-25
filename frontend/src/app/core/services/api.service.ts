@@ -1,6 +1,7 @@
 import { Injectable, Inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpEventType, HttpEvent } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { API_BASE_URL } from '../../app.config'; // Assuming environment.ts exports API_BASE_URL
 
 @Injectable({
@@ -30,5 +31,31 @@ export class ApiService {
     }
 
     return this.http.get<any[]>(`${this.apiUrl}/market-data`, { params });
+  }
+
+  uploadAndIngest(formData: FormData, onProgress: (progress: number) => void): Observable<any> {
+    return this.http.post(`${this.apiUrl}/ingest/upload`, formData, {
+      reportProgress: true,
+      observe: 'events'
+    }).pipe(
+      map((event: HttpEvent<any>) => {
+        if (event.type === HttpEventType.UploadProgress) {
+          const progress = event.total ? Math.round((100 * event.loaded) / event.total) : 0;
+          onProgress(progress);
+        } else if (event.type === HttpEventType.Response) {
+          onProgress(100);
+          return event.body;
+        }
+        return null;
+      })
+    );
+  }
+
+  getIngestionJobs(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/ingest/jobs`);
+  }
+
+  getIngestionJob(jobId: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/ingest/jobs/${jobId}`);
   }
 }
