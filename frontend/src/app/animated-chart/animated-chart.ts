@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
 import { createChart, IChartApi, ISeriesApi, CandlestickSeries, Time } from 'lightweight-charts';
 import { WebsocketService, WSTick } from '../core/services/websocket.service';
 import { CommonModule } from '@angular/common';
@@ -19,7 +19,7 @@ interface ChartCandle {
   templateUrl: './animated-chart.html',
   styleUrl: './animated-chart.scss',
 })
-export class AnimatedChartComponent implements OnInit, OnDestroy {
+export class AnimatedChartComponent implements AfterViewInit, OnDestroy {
   @ViewChild('chartContainer') chartContainer!: ElementRef;
 
   private chart!: IChartApi;
@@ -29,7 +29,7 @@ export class AnimatedChartComponent implements OnInit, OnDestroy {
 
   constructor(private websocketService: WebsocketService) {}
 
-  ngOnInit(): void {
+  ngAfterViewInit(): void {
     this.initChart();
     this.subscribeToWebSocket();
   }
@@ -87,6 +87,10 @@ export class AnimatedChartComponent implements OnInit, OnDestroy {
   private subscribeToWebSocket(): void {
     this.wsSubscription = this.websocketService.messages$.subscribe({
       next: (tick: WSTick) => {
+        if (!this.candlestickSeries) {
+          console.warn('Chart not ready, skipping tick');
+          return;
+        }
         const chartTime: Time = Math.floor(new Date(tick.timestamp).getTime() / 1000) as Time;
 
         if (tick.isFinal) {
