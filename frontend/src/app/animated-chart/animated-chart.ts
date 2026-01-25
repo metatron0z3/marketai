@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
-import { createChart, IChartApi, ISeriesApi, CandlestickSeriesPartialOptions, Time } from 'lightweight-charts';
-import { WebsocketService, WSTick } from '../../core/services/websocket.service';
+import { createChart, IChartApi, ISeriesApi, CandlestickSeries, Time } from 'lightweight-charts';
+import { WebsocketService, WSTick } from '../core/services/websocket.service';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 
@@ -67,11 +67,13 @@ export class AnimatedChartComponent implements OnInit, OnDestroy {
       autoSize: true, // Enable auto-sizing
     });
 
-    this.candlestickSeries = this.chart.addCandlestickSeries({
+    this.candlestickSeries = this.chart.addSeries(CandlestickSeries, {
       upColor: '#26a69a',
       downColor: '#ef5350',
-      borderVisible: false,
-      wickColor: '#d1d4dc',
+      borderDownColor: '#ef5350',
+      borderUpColor: '#26a69a',
+      wickDownColor: '#ef5350',
+      wickUpColor: '#26a69a',
     });
 
     new ResizeObserver(entries => {
