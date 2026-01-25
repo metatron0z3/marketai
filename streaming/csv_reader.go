@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"log"
 	"time"
@@ -103,5 +104,11 @@ func ReadCandlesFromCSV(filePath string) ([]Candle, error) {
 			Volume:       volume,
 		})
 	}
+
+	// Sort candles chronologically (oldest first) - required by lightweight-charts
+	sort.Slice(candles, func(i, j int) bool {
+		return candles[i].Timestamp.Before(candles[j].Timestamp)
+	})
+
 	return candles, nil
 }
