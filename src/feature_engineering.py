@@ -70,7 +70,14 @@ class TradingFeatureEngineer:
                     rsi_14 DOUBLE,
                     bb_upper DOUBLE,
                     bb_lower DOUBLE,
-                    bb_position DOUBLE
+                    bb_position DOUBLE,
+                    distance_to_support DOUBLE,
+                    distance_to_resistance DOUBLE,
+                    support_strength DOUBLE,
+                    resistance_strength DOUBLE,
+                    nearest_level_type SYMBOL,
+                    price_vs_vwap DOUBLE,
+                    price_acceleration DOUBLE
                 ) TIMESTAMP(ts) PARTITION BY DAY;
             """,
             "volume_features": """
@@ -86,7 +93,10 @@ class TradingFeatureEngineer:
                     volume_ratio_5m DOUBLE,
                     volume_ratio_15m DOUBLE,
                     price_volume_correlation_5m DOUBLE,
-                    price_volume_correlation_15m DOUBLE
+                    price_volume_correlation_15m DOUBLE,
+                    volume_weighted_momentum DOUBLE,
+                    volume_profile_percentile DOUBLE,
+                    abnormal_volume_flag BOOLEAN
                 ) TIMESTAMP(ts) PARTITION BY DAY;
             """,
             "microstructure_features": """
@@ -101,7 +111,11 @@ class TradingFeatureEngineer:
                     large_trade_ratio_1m DOUBLE,
                     large_trade_ratio_5m DOUBLE,
                     trade_intensity_1m DOUBLE,
-                    trade_intensity_5m DOUBLE
+                    trade_intensity_5m DOUBLE,
+                    price_impact_1m DOUBLE,
+                    price_impact_5m DOUBLE,
+                    order_flow_imbalance DOUBLE,
+                    trade_size_momentum DOUBLE
                 ) TIMESTAMP(ts) PARTITION BY DAY;
             """,
             "technical_features": """
@@ -118,8 +132,47 @@ class TradingFeatureEngineer:
                     macd_signal DOUBLE,
                     macd_histogram DOUBLE,
                     stoch_k DOUBLE,
-                    stoch_d DOUBLE
+                    stoch_d DOUBLE,
+                    williams_r DOUBLE,
+                    cci DOUBLE,
+                    atr DOUBLE,
+                    adx DOUBLE,
+                    trend_strength DOUBLE
                 ) TIMESTAMP(ts) PARTITION BY DAY;
+            """,
+            "advanced_features": """
+                CREATE TABLE IF NOT EXISTS advanced_features (
+                    ts TIMESTAMP,
+                    symbol SYMBOL,
+                    fractal_dimension DOUBLE,
+                    hurst_exponent DOUBLE,
+                    entropy DOUBLE,
+                    regime_indicator DOUBLE,
+                    volatility_regime SYMBOL,
+                    momentum_regime SYMBOL,
+                    market_phase SYMBOL,
+                    liquidity_score DOUBLE,
+                    mean_reversion_strength DOUBLE,
+                    trend_persistence DOUBLE,
+                    volatility_of_volatility DOUBLE,
+                    skewness_1h DOUBLE,
+                    kurtosis_1h DOUBLE,
+                    jump_detection BOOLEAN,
+                    regime_change_probability DOUBLE
+                ) TIMESTAMP(ts) PARTITION BY DAY;
+            """,
+            "support_resistance_levels": """
+                CREATE TABLE IF NOT EXISTS support_resistance_levels (
+                    id LONG,
+                    symbol SYMBOL,
+                    level_type SYMBOL,
+                    price_level DOUBLE,
+                    strength DOUBLE,
+                    created_at TIMESTAMP,
+                    last_tested TIMESTAMP,
+                    test_count LONG,
+                    is_active BOOLEAN
+                ) TIMESTAMP(created_at) PARTITION BY DAY;
             """,
         }
 

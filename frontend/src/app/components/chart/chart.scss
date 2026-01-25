@@ -1,0 +1,17 @@
+.chart-container {
+  width: 100%;
+  height: 500px; /* Or a dynamic height as needed */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f0f0f0; /* Light background for visibility */
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden; /* Ensures chart content stays within bounds */
+}
+
+/* Style the actual chart canvas if needed, though lightweight-charts handles most of it */
+.chart-container > div {
+  width: 100%;
+  height: 100%;
+}

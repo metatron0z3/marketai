@@ -1,8 +1,7 @@
 FROM python:3.12-slim
 WORKDIR /src
 
-# Copy only what we need for Streamlit
-COPY src/market_view_day.py .
+# Copy requirements first (for better Docker layer caching)
 COPY requirements.streamlit.txt .
 
 # Install system dependencies (minimal for Streamlit)
@@ -13,6 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python dependencies
 RUN pip install --upgrade pip
 RUN pip install -r requirements.streamlit.txt
+
+# Copy the entire src directory (will be overridden by volume mount in docker-compose)
+COPY src/ .
 
 # Expose Streamlit port
 EXPOSE 8501

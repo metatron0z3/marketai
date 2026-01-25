@@ -31,6 +31,8 @@ services:
     container_name: market_streamlit
     ports:
       - "8501:8501"
+    volumes:
+      - ./src:/src  # Mount local src directory to container
     depends_on:
       - ingest
       - questdb
@@ -39,6 +41,24 @@ services:
     environment:
       - QUESTDB_HOST=questdb
       - QUESTDB_PORT=9000
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: market_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app # Mount local backend app directory for development
+    depends_on:
+      - questdb
+    networks:
+      - market_network
+    environment:
+      - QUESTDB_HOST=questdb
+      - QUESTDB_PORT=9000
+
 
 volumes:
   questdb-data:

@@ -1,0 +1,51 @@
+<div class="container">
+  <h1>Market Data Viewer</h1>
+
+  <div class="controls">
+    <div class="control-group">
+      <label for="instrument-select">Instrument:</label>
+      <select id="instrument-select" [(ngModel)]="selectedInstrumentId">
+        <option *ngFor="let instrument of instruments" [value]="instrument.id">{{ instrument.symbol }}</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label for="timeframe-select">Timeframe:</label>
+      <select id="timeframe-select" [(ngModel)]="selectedTimeframe">
+        <option *ngFor="let tf of timeframes" [value]="tf">{{ tf }}</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label for="start-date">Start Date:</label>
+      <input type="date" id="start-date" [(ngModel)]="startDate">
+    </div>
+
+    <div class="control-group">
+      <label for="end-date">End Date:</label>
+      <input type="date" id="end-date" [(ngModel)]="endDate">
+    </div>
+
+    <div class="control-group">
+      <button class="pull-button" (click)="onPullData()" [disabled]="loading">
+        {{ loading ? 'Loading...' : 'Pull Data' }}
+      </button>
+    </div>
+  </div>
+
+  <div *ngIf="loading" class="loading">Loading market data...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <div *ngIf="!loading && !error && marketData && marketData.length > 0">
+    <div class="chart-header">
+      <h2>{{ getSelectedSymbol() }} - {{ selectedTimeframe }} Chart</h2>
+      <p class="date-range">{{ formatDateRange() }}</p>
+      <p class="data-count">{{ marketData.length }} data points</p>
+    </div>
+    <app-test-render [marketData]="marketData"></app-test-render>
+  </div>
+
+  <div *ngIf="!loading && !error && (!marketData || marketData.length === 0)">
+    No market data available for the selected criteria.
+  </div>
+</div>

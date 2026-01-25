@@ -87,4 +87,4 @@ For local execution without Docker:
 
 - **Memory Issues**:
   - Check: `top -l 1 | grep PhysMem`.
-  - Close apps: `osascript -e 'quit app "Google Chrome"'`.
+  - Close apps: `osascript -e 'quit app "Google Chrome"'`
