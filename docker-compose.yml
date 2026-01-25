@@ -71,6 +71,19 @@ services:
     networks:
       - market_network
 
+  streaming:
+    build:
+      context: ./streaming
+      dockerfile: Dockerfile
+    container_name: market_streaming
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./backend/app/models/static_data:/app/static_data
+    depends_on:
+      - questdb
+    networks:
+      - market_network
 
 volumes:
   questdb-data:
