@@ -43,11 +43,14 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   private resizeObserver: ResizeObserver | null = null;
   private daySessions: DaySession[] = [];
 
-  // Session times in hours (UTC - adjust if your data is in different timezone)
-  private readonly PRE_MARKET_START = 9;    // 4:00 AM ET = 9:00 UTC
-  private readonly MARKET_OPEN = 14.5;      // 9:30 AM ET = 14:30 UTC
-  private readonly MARKET_CLOSE = 21;       // 4:00 PM ET = 21:00 UTC
-  private readonly AFTER_MARKET_END = 1;    // 8:00 PM ET = 01:00 UTC next day
+  // US Eastern Time market hours (in ET local time)
+  // Pre-market: 4:00 AM - 9:30 AM ET
+  // Market hours: 9:30 AM - 4:00 PM ET
+  // After-hours: 4:00 PM - 8:00 PM ET
+  private readonly ET_PRE_MARKET_START = 4;     // 4:00 AM ET
+  private readonly ET_MARKET_OPEN = 9.5;        // 9:30 AM ET
+  private readonly ET_MARKET_CLOSE = 16;        // 4:00 PM ET
+  private readonly ET_AFTER_MARKET_END = 20;    // 8:00 PM ET
 
   // Colors
   private readonly BG_MARKET = '#1a1a1a';           // Dark for market hours
@@ -69,6 +72,19 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
           },
           horzLines: {
             color: 'rgba(42, 46, 57, 0.5)',
+          },
+        },
+        localization: {
+          timeFormatter: (time: number) => {
+            // Convert UTC timestamp to Eastern Time for display
+            const date = new Date(time * 1000);
+            // Format in US Eastern timezone
+            return date.toLocaleTimeString('en-US', {
+              timeZone: 'America/New_York',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            });
           },
         },
         timeScale: {
@@ -125,6 +141,53 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     return day !== 0 && day !== 6;
   }
 
+  /**
+   * Get the UTC offset for US Eastern Time on a given date.
+   * Returns 5 for EST (winter) or 4 for EDT (summer).
+   */
+  private getETOffset(dateStr: string): number {
+    // Create a date at noon ET to check DST
+    // DST in US: starts 2nd Sunday in March, ends 1st Sunday in November
+    const date = new Date(dateStr + 'T12:00:00');
+    const jan = new Date(date.getFullYear(), 0, 1);
+    const jul = new Date(date.getFullYear(), 6, 1);
+
+    // Get timezone offsets (these are in minutes, negative for US)
+    const janOffset = jan.getTimezoneOffset();
+    const julOffset = jul.getTimezoneOffset();
+    const dateOffset = date.getTimezoneOffset();
+
+    // If the date's offset matches the smaller offset (summer), it's DST
+    // Note: This only works if the browser is in a US timezone
+    // For a more robust solution, we'd need a timezone library
+
+    // Hardcode ET DST rules for simplicity
+    const year = parseInt(dateStr.split('-')[0]);
+    const month = parseInt(dateStr.split('-')[1]);
+    const day = parseInt(dateStr.split('-')[2]);
+
+    // DST starts 2nd Sunday of March at 2 AM ET
+    // DST ends 1st Sunday of November at 2 AM ET
+    const dstStart = this.getNthSundayOfMonth(year, 3, 2); // 2nd Sunday of March
+    const dstEnd = this.getNthSundayOfMonth(year, 11, 1);  // 1st Sunday of November
+
+    const checkDate = new Date(year, month - 1, day);
+    const isDST = checkDate >= dstStart && checkDate < dstEnd;
+
+    return isDST ? 4 : 5; // EDT = UTC-4, EST = UTC-5
+  }
+
+  /**
+   * Get the nth Sunday of a given month
+   */
+  private getNthSundayOfMonth(year: number, month: number, n: number): Date {
+    const firstDay = new Date(year, month - 1, 1);
+    const dayOfWeek = firstDay.getDay();
+    const firstSunday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+    const nthSunday = firstSunday + (n - 1) * 7;
+    return new Date(year, month - 1, nthSunday);
+  }
+
   private updateChartData(): void {
     if (!this.candlestickSeries || !this.chart || !this.data || this.data.length === 0) {
       return;
@@ -165,13 +228,32 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
 
     // Build day sessions for overlay
     this.daySessions = Array.from(uniqueDates).sort().map(dateStr => {
-      const dayStart = new Date(dateStr + 'T00:00:00Z');
+      // Create timestamps for Eastern Time market hours
+      // Use a date in ET to determine DST offset
+      const etOffset = this.getETOffset(dateStr);
+
+      // Convert ET hours to UTC timestamps
+      const dayStartUTC = new Date(dateStr + 'T00:00:00Z').getTime() / 1000;
+
+      // ET times need to be converted to UTC by adding the offset
+      // If ET is UTC-5 (EST), then 9:30 AM ET = 14:30 UTC (add 5 hours)
+      // If ET is UTC-4 (EDT), then 9:30 AM ET = 13:30 UTC (add 4 hours)
+      const preMarketStart = (dayStartUTC + (this.ET_PRE_MARKET_START + etOffset) * 3600) as UTCTimestamp;
+      const marketOpen = (dayStartUTC + (this.ET_MARKET_OPEN + etOffset) * 3600) as UTCTimestamp;
+      const marketClose = (dayStartUTC + (this.ET_MARKET_CLOSE + etOffset) * 3600) as UTCTimestamp;
+      const afterMarketEnd = (dayStartUTC + (this.ET_AFTER_MARKET_END + etOffset) * 3600) as UTCTimestamp;
+
+      console.log(`Session for ${dateStr}: ET offset=${etOffset}h, ` +
+        `preMarket=${new Date(preMarketStart * 1000).toISOString()}, ` +
+        `open=${new Date(marketOpen * 1000).toISOString()}, ` +
+        `close=${new Date(marketClose * 1000).toISOString()}`);
+
       return {
         date: dateStr,
-        preMarketStart: (dayStart.getTime() / 1000 + this.PRE_MARKET_START * 3600) as UTCTimestamp,
-        marketOpen: (dayStart.getTime() / 1000 + this.MARKET_OPEN * 3600) as UTCTimestamp,
-        marketClose: (dayStart.getTime() / 1000 + this.MARKET_CLOSE * 3600) as UTCTimestamp,
-        afterMarketEnd: (dayStart.getTime() / 1000 + 24 * 3600) as UTCTimestamp, // End of day
+        preMarketStart,
+        marketOpen,
+        marketClose,
+        afterMarketEnd,
       };
     });
 
@@ -208,6 +290,22 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
 
     const timeScale = this.chart.timeScale();
 
+    // Get the time scale width and calculate left offset
+    // The chart has a right price scale, so content area starts at left edge
+    // But we need to account for any internal padding
+    const timeScaleWidth = timeScale.width();
+    const containerWidth = rect.width;
+    // The price scale is on the right, so left offset is minimal (just chart padding)
+    // The time scale width is the actual drawing area width
+    const rightPriceScaleWidth = containerWidth - timeScaleWidth;
+
+    // Debug: log first candle coordinate for comparison
+    if (this.data.length > 0) {
+      const firstCandleTime = (new Date(this.data[0].timestamp).getTime() / 1000) as UTCTimestamp;
+      const firstCandleX = timeScale.timeToCoordinate(firstCandleTime);
+      console.log(`First candle (${this.data[0].timestamp}): x=${firstCandleX}, timeScaleWidth=${timeScaleWidth}, containerWidth=${containerWidth}`);
+    }
+
     // Draw session backgrounds and day separators
     this.daySessions.forEach((session, index) => {
       // Get X coordinates for session boundaries
@@ -215,6 +313,8 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       const marketOpenX = timeScale.timeToCoordinate(session.marketOpen);
       const marketCloseX = timeScale.timeToCoordinate(session.marketClose);
       const afterMarketEndX = timeScale.timeToCoordinate(session.afterMarketEnd);
+
+      console.log(`Session ${session.date} coords: preMarket=${preMarketX}, open=${marketOpenX}, close=${marketCloseX}, afterEnd=${afterMarketEndX}`);
 
       // Draw pre-market background (gray)
       if (preMarketX !== null && marketOpenX !== null) {
