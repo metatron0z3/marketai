@@ -42,64 +42,39 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 	log.Println("WebSocket client connected.")
 
-	// Stream historical candles
+	// Stream historical candles - one complete candle every 2 seconds
 	for i, candle := range historicalCandles {
-		log.Printf("Streaming candle %d for InstrumentID %d\n", i, candle.InstrumentID)
-		// Simulate 5 minutes (300 seconds) of ticks
-		for tick := 0; tick < 150; tick++ { // 300 seconds / 2 seconds per tick = 150 ticks
-			time.Sleep(2 * time.Second)
-
-			// Simple linear interpolation for price
-			// Current price will move from Open to Close over 149 intervals (150 ticks)
-			interpolatedClose := candle.Open + (candle.Close-candle.Open)*float64(tick)/149
-
-			// Determine current high/low for the forming candle based on interpolated price
-			currentHigh := candle.Open
-			if interpolatedClose > currentHigh {
-				currentHigh = interpolatedClose
-			}
-			currentLow := candle.Open
-			if interpolatedClose < currentLow {
-				currentLow = interpolatedClose
-			}
-			// Also ensure that the current high/low at least includes the actual high/low
-			// This is a simplification; a more accurate simulation might involve random walks
-			if candle.High > currentHigh {
-				currentHigh = candle.High
-			}
-			if candle.Low < currentLow {
-				currentLow = candle.Low
-			}
-
-
-			isFinal := (tick == 149)
-
-			tickData := WSTick{
-				Timestamp:    candle.Timestamp,
-				InstrumentID: candle.InstrumentID,
-				Open:         candle.Open,
-				High:         currentHigh, // Simplified
-				Low:          currentLow,  // Simplified
-				Close:        interpolatedClose,
-				Volume:       candle.Volume, // Volume for the entire candle
-				IsFinal:      isFinal,
-			}
-
-			jsonTick, err := json.Marshal(tickData)
-			if err != nil {
-				log.Printf("Error marshalling tick data: %v\n", err)
-				continue
-			}
-
-			if err := conn.WriteMessage(websocket.TextMessage, jsonTick); err != nil {
-				log.Printf("Error writing message: %v\n", err)
-				return // Client disconnected
-			}
+		if i%50 == 0 {
+			log.Printf("Streaming candle %d/%d for InstrumentID %d\n", i, len(historicalCandles), candle.InstrumentID)
 		}
+
+		tickData := WSTick{
+			Timestamp:    candle.Timestamp,
+			InstrumentID: candle.InstrumentID,
+			Open:         candle.Open,
+			High:         candle.High,
+			Low:          candle.Low,
+			Close:        candle.Close,
+			Volume:       candle.Volume,
+			IsFinal:      true, // Each candle is complete
+		}
+
+		jsonTick, err := json.Marshal(tickData)
+		if err != nil {
+			log.Printf("Error marshalling tick data: %v\n", err)
+			continue
+		}
+
+		if err := conn.WriteMessage(websocket.TextMessage, jsonTick); err != nil {
+			log.Printf("Error writing message: %v\n", err)
+			return // Client disconnected
+		}
+
+		time.Sleep(2 * time.Second) // New candle every 2 seconds
 	}
 
 	log.Println("Finished streaming all historical data.")
-	// Block forever to keep the goroutine alive if no further data
+	// Keep connection open
 	select {}
 }
 
