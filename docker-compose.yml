@@ -42,15 +42,39 @@ services:
       - QUESTDB_HOST=questdb
       - QUESTDB_PORT=9000
 
-  backend:
+  # NestJS Backend - API Gateway
+  nestjs-backend:
+    build:
+      context: ./backend-nest
+      dockerfile: Dockerfile
+    container_name: market_nestjs_backend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - questdb
+      - python-service
+    networks:
+      - market_network
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - QUESTDB_HOST=questdb
+      - QUESTDB_PORT=8812
+      - QUESTDB_USER=admin
+      - QUESTDB_PASSWORD=quest
+      - QUESTDB_DATABASE=qdb
+      - PYTHON_SERVICE_URL=http://python-service:8000
+
+  # Python Service - Data Ingestion & ML
+  python-service:
     build:
       context: .
-      dockerfile: Dockerfile.backend
-    container_name: market_backend
+      dockerfile: Dockerfile.python-service
+    container_name: market_python_service
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/app:/app/app # Mount local backend app directory for development
+      - ./python-service/app:/app/app # Mount local app directory for development
     depends_on:
       - questdb
     networks:
@@ -67,7 +91,7 @@ services:
     ports:
       - "4200:80"
     depends_on:
-      - backend
+      - nestjs-backend
     networks:
       - market_network
 
@@ -79,7 +103,7 @@ services:
     ports:
       - "8082:8082"
     volumes:
-      - ./backend/app/models/static_data:/app/static_data
+      - ./python-service/app/models/static_data:/app/static_data
     depends_on:
       - questdb
     networks:
