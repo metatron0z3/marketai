@@ -28,13 +28,9 @@ export class MarketDataPage implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // Set default date range (last 7 days)
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 7);
-
-    this.startDate = startDate.toISOString().split('T')[0];
-    this.endDate = endDate.toISOString().split('T')[0];
+    // Set default date range to available data (Jan 2024)
+    this.startDate = '2024-01-02';
+    this.endDate = '2024-01-03';
 
     this.fetchInstruments();
   }
