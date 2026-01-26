@@ -7,6 +7,7 @@ import {
   SimpleChanges,
   AfterViewInit,
   OnDestroy,
+  HostListener,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
@@ -15,8 +16,9 @@ import {
   ISeriesApi,
   CandlestickData,
   UTCTimestamp,
-  CandlestickSeries
+  CandlestickSeries,
 } from 'lightweight-charts';
+import { SupportResistanceLinesComponent } from '../support-resistance-lines/support-resistance-lines';
 
 interface DaySession {
   date: string;
@@ -29,33 +31,55 @@ interface DaySession {
 @Component({
   selector: 'app-chart',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, SupportResistanceLinesComponent],
   templateUrl: './chart.html',
-  styleUrl: './chart.scss'
+  styleUrl: './chart.scss',
 })
 export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input() data: any[] = [];
   @ViewChild('chartContainer') chartContainer!: ElementRef;
   @ViewChild('overlayCanvas') overlayCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild(SupportResistanceLinesComponent)
+  supportResistanceLinesComponent!: SupportResistanceLinesComponent;
 
-  private chart: IChartApi | null = null;
-  private candlestickSeries: ISeriesApi<'Candlestick'> | null = null;
+  public chart: IChartApi | null = null;
+  public candlestickSeries: ISeriesApi<'Candlestick'> | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private daySessions: DaySession[] = [];
 
+  @HostListener('mousemove', ['$event'])
+  onMousemove(event: MouseEvent) {
+    if (this.supportResistanceLinesComponent) {
+      this.supportResistanceLinesComponent.onMousemove(event);
+    }
+  }
+
+  @HostListener('mouseleave')
+  onMouseleave() {
+    if (this.supportResistanceLinesComponent) {
+      this.supportResistanceLinesComponent.onMouseleave();
+    }
+  }
+
+  @HostListener('dblclick')
+  onDoubleClick() {
+    if (this.supportResistanceLinesComponent) {
+      this.supportResistanceLinesComponent.onDoubleClick();
+    }
+  }
   // US Eastern Time market hours (in ET local time)
   // Pre-market: 4:00 AM - 9:30 AM ET
   // Market hours: 9:30 AM - 4:00 PM ET
   // After-hours: 4:00 PM - 8:00 PM ET
-  private readonly ET_PRE_MARKET_START = 4;     // 4:00 AM ET
-  private readonly ET_MARKET_OPEN = 9.5;        // 9:30 AM ET
-  private readonly ET_MARKET_CLOSE = 16;        // 4:00 PM ET
-  private readonly ET_AFTER_MARKET_END = 20;    // 8:00 PM ET
+  private readonly ET_PRE_MARKET_START = 4; // 4:00 AM ET
+  private readonly ET_MARKET_OPEN = 9.5; // 9:30 AM ET
+  private readonly ET_MARKET_CLOSE = 16; // 4:00 PM ET
+  private readonly ET_AFTER_MARKET_END = 20; // 8:00 PM ET
 
   // Colors
-  private readonly BG_MARKET = '#1a1a1a';           // Dark for market hours
-  private readonly BG_EXTENDED = 'rgba(60, 60, 60, 0.6)';  // Gray for extended hours
-  private readonly DAY_SEPARATOR = '#ffeb3b';       // Yellow dashed line
+  private readonly BG_MARKET = '#1a1a1a'; // Dark for market hours
+  private readonly BG_EXTENDED = 'rgba(60, 60, 60, 0.6)'; // Gray for extended hours
+  private readonly DAY_SEPARATOR = '#ffeb3b'; // Yellow dashed line
 
   ngAfterViewInit(): void {
     if (this.chartContainer) {
@@ -63,7 +87,7 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
         width: this.chartContainer.nativeElement.clientWidth,
         height: 500,
         layout: {
-          background: { color: 'transparent' },  // Transparent so overlay shows
+          background: { color: 'transparent' }, // Transparent so overlay shows
           textColor: '#d1d4dc',
         },
         grid: {
@@ -169,7 +193,7 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     // DST starts 2nd Sunday of March at 2 AM ET
     // DST ends 1st Sunday of November at 2 AM ET
     const dstStart = this.getNthSundayOfMonth(year, 3, 2); // 2nd Sunday of March
-    const dstEnd = this.getNthSundayOfMonth(year, 11, 1);  // 1st Sunday of November
+    const dstEnd = this.getNthSundayOfMonth(year, 11, 1); // 1st Sunday of November
 
     const checkDate = new Date(year, month - 1, day);
     const isDST = checkDate >= dstStart && checkDate < dstEnd;
@@ -189,12 +213,17 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   private updateChartData(): void {
-    if (!this.candlestickSeries || !this.chart || !this.data || this.data.length === 0) {
+    if (
+      !this.candlestickSeries ||
+      !this.chart ||
+      !this.data ||
+      this.data.length === 0
+    ) {
       return;
     }
 
     // Filter to weekdays only
-    const filteredData = this.data.filter(d => {
+    const filteredData = this.data.filter((d) => {
       const date = new Date(d.timestamp);
       return this.isWeekday(date);
     });
@@ -208,7 +237,7 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     const formattedData: CandlestickData<UTCTimestamp>[] = [];
     const uniqueDates = new Set<string>();
 
-    filteredData.forEach(d => {
+    filteredData.forEach((d) => {
       const timestamp = new Date(d.timestamp);
       const time = (timestamp.getTime() / 1000) as UTCTimestamp;
       const dateStr = timestamp.toISOString().split('T')[0];
@@ -227,35 +256,43 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     formattedData.sort((a, b) => a.time - b.time);
 
     // Build day sessions for overlay
-    this.daySessions = Array.from(uniqueDates).sort().map(dateStr => {
-      // Create timestamps for Eastern Time market hours
-      // Use a date in ET to determine DST offset
-      const etOffset = this.getETOffset(dateStr);
+    this.daySessions = Array.from(uniqueDates)
+      .sort()
+      .map((dateStr) => {
+        // Create timestamps for Eastern Time market hours
+        // Use a date in ET to determine DST offset
+        const etOffset = this.getETOffset(dateStr);
 
-      // Convert ET hours to UTC timestamps
-      const dayStartUTC = new Date(dateStr + 'T00:00:00Z').getTime() / 1000;
+        // Convert ET hours to UTC timestamps
+        const dayStartUTC = new Date(dateStr + 'T00:00:00Z').getTime() / 1000;
 
-      // ET times need to be converted to UTC by adding the offset
-      // If ET is UTC-5 (EST), then 9:30 AM ET = 14:30 UTC (add 5 hours)
-      // If ET is UTC-4 (EDT), then 9:30 AM ET = 13:30 UTC (add 4 hours)
-      const preMarketStart = (dayStartUTC + (this.ET_PRE_MARKET_START + etOffset) * 3600) as UTCTimestamp;
-      const marketOpen = (dayStartUTC + (this.ET_MARKET_OPEN + etOffset) * 3600) as UTCTimestamp;
-      const marketClose = (dayStartUTC + (this.ET_MARKET_CLOSE + etOffset) * 3600) as UTCTimestamp;
-      const afterMarketEnd = (dayStartUTC + (this.ET_AFTER_MARKET_END + etOffset) * 3600) as UTCTimestamp;
+        // ET times need to be converted to UTC by adding the offset
+        // If ET is UTC-5 (EST), then 9:30 AM ET = 14:30 UTC (add 5 hours)
+        // If ET is UTC-4 (EDT), then 9:30 AM ET = 13:30 UTC (add 4 hours)
+        const preMarketStart = (dayStartUTC +
+          (this.ET_PRE_MARKET_START + etOffset) * 3600) as UTCTimestamp;
+        const marketOpen = (dayStartUTC +
+          (this.ET_MARKET_OPEN + etOffset) * 3600) as UTCTimestamp;
+        const marketClose = (dayStartUTC +
+          (this.ET_MARKET_CLOSE + etOffset) * 3600) as UTCTimestamp;
+        const afterMarketEnd = (dayStartUTC +
+          (this.ET_AFTER_MARKET_END + etOffset) * 3600) as UTCTimestamp;
 
-      console.log(`Session for ${dateStr}: ET offset=${etOffset}h, ` +
-        `preMarket=${new Date(preMarketStart * 1000).toISOString()}, ` +
-        `open=${new Date(marketOpen * 1000).toISOString()}, ` +
-        `close=${new Date(marketClose * 1000).toISOString()}`);
+        console.log(
+          `Session for ${dateStr}: ET offset=${etOffset}h, ` +
+            `preMarket=${new Date(preMarketStart * 1000).toISOString()}, ` +
+            `open=${new Date(marketOpen * 1000).toISOString()}, ` +
+            `close=${new Date(marketClose * 1000).toISOString()}`
+        );
 
-      return {
-        date: dateStr,
-        preMarketStart,
-        marketOpen,
-        marketClose,
-        afterMarketEnd,
-      };
-    });
+        return {
+          date: dateStr,
+          preMarketStart,
+          marketOpen,
+          marketClose,
+          afterMarketEnd,
+        };
+      });
 
     // Set candlestick data
     this.candlestickSeries.setData(formattedData);
@@ -264,7 +301,9 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     // Draw the overlay after a short delay to let chart render
     setTimeout(() => this.drawOverlay(), 100);
 
-    console.log(`Chart updated: ${formattedData.length} candles, ${this.daySessions.length} days`);
+    console.log(
+      `Chart updated: ${formattedData.length} candles, ${this.daySessions.length} days`
+    );
   }
 
   private drawOverlay(): void {
@@ -301,9 +340,12 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
 
     // Debug: log first candle coordinate for comparison
     if (this.data.length > 0) {
-      const firstCandleTime = (new Date(this.data[0].timestamp).getTime() / 1000) as UTCTimestamp;
+      const firstCandleTime = (new Date(this.data[0].timestamp).getTime() /
+        1000) as UTCTimestamp;
       const firstCandleX = timeScale.timeToCoordinate(firstCandleTime);
-      console.log(`First candle (${this.data[0].timestamp}): x=${firstCandleX}, timeScaleWidth=${timeScaleWidth}, containerWidth=${containerWidth}`);
+      console.log(
+        `First candle (${this.data[0].timestamp}): x=${firstCandleX}, timeScaleWidth=${timeScaleWidth}, containerWidth=${containerWidth}`
+      );
     }
 
     // Draw session backgrounds and day separators
@@ -314,7 +356,9 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       const marketCloseX = timeScale.timeToCoordinate(session.marketClose);
       const afterMarketEndX = timeScale.timeToCoordinate(session.afterMarketEnd);
 
-      console.log(`Session ${session.date} coords: preMarket=${preMarketX}, open=${marketOpenX}, close=${marketCloseX}, afterEnd=${afterMarketEndX}`);
+      console.log(
+        `Session ${session.date} coords: preMarket=${preMarketX}, open=${marketOpenX}, close=${marketCloseX}, afterEnd=${afterMarketEndX}`
+      );
 
       // Draw pre-market background (gray)
       if (preMarketX !== null && marketOpenX !== null) {
@@ -344,11 +388,14 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
 
   private setupResizeObserver(): void {
     if (this.chartContainer) {
-      this.resizeObserver = new ResizeObserver(entries => {
+      this.resizeObserver = new ResizeObserver((entries) => {
         if (entries.length > 0 && entries[0].contentRect) {
           const { width } = entries[0].contentRect;
           this.chart?.applyOptions({ width, height: 500 });
           this.drawOverlay();
+          if (this.supportResistanceLinesComponent) {
+            this.supportResistanceLinesComponent.onResize();
+          }
         }
       });
       this.resizeObserver.observe(this.chartContainer.nativeElement);

@@ -1,0 +1,6 @@
+.overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none; /* Make sure the canvas doesn't block mouse events to the chart */
+}

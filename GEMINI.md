@@ -29,27 +29,15 @@ This document outlines the plan to introduce a new real-time data streaming serv
 
 ## 2. Refactoring Roadmap
 
-### Phase 1: Go Service Foundation & Mock Data Streaming
--   [ ] Create a `streaming/` directory for the Go application.
--   [ ] Initialize a Go module.
--   [ ] Implement a basic HTTP/WebSocket server in `streaming/main.go`.
--   [ ] Create a `streaming/Dockerfile` to build and run the Go application.
--   [ ] Implement a CSV reader to parse the data from `backend/app/models/static_data/questdb-query-1769038517286.csv`.
--   [ ] Develop the core streaming logic: For each 5-minute data row, simulate and stream interpolated price ticks every 2 seconds over the WebSocket.
--   [ ] Update `docker-compose.yml` to add the new `streaming` service.
+### Phase 1: Add Support & Resistance Lines to chart component
+-   [ ] Find the frontend market-data component that draws a static chart
+-   [ ] Create a component to work inside this one
+-   [ ] Feature: When you mouse over the rendered chart, it creates a 2px, orange horizontal line across the x-axis at the vertical point
+-   [ ] At the right edge of the chart should be displayed the precise price at that point. Price is displayed as the y-axis
+-   [ ] IIf the user double-clicks, that orange line becoes permanent.
+-   [ ] Save the price value of that line in a json file called support-resistance.json
+-   [ ] The user should be able to set multiple lines in one chart
 
-### Phase 2: Frontend Animated Chart
--   [ ] Generate a new Angular component for the animated chart (`ng generate component animated-chart`).
--   [ ] Add a new route (`/animated-chart`) in `app.routes.ts` pointing to the new component.
--   [ ] Select and integrate a suitable charting library that supports real-time updates (e.g., Lightweight Charts, ECharts).
--   [ ] Implement a WebSocket service in Angular to connect to the Go streamer.
--   [ ] Develop the component logic to receive streaming data and update the chart, creating the animation effect for each candle.
--   [ ] Ensure the chart correctly displays the default range (5-day trading week, 9:30 am - 4:00 pm).
 
-### Phase 3: QuestDB Integration & Cleanup
--   [ ] Modify the Go service to connect to the QuestDB database instead of reading from the CSV file.
--   [ ] Implement the SQL query in the Go service to fetch the required OHLCV data.
--   [ ] Ensure the live data from QuestDB is streamed correctly and the chart animation remains smooth.
--   [ ] Once verified, the CSV reading logic can be removed from the Go service.
 
 ---
