@@ -37,6 +37,8 @@ interface DaySession {
 })
 export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input() data: any[] = [];
+  @Input() symbol: string = '';
+  @Input() supportResistanceEnabled: boolean = false;
   @ViewChild('chartContainer') chartContainer!: ElementRef;
   @ViewChild('overlayCanvas') overlayCanvas!: ElementRef<HTMLCanvasElement>;
   @ViewChild(SupportResistanceLinesComponent)
@@ -49,22 +51,29 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
 
   @HostListener('mousemove', ['$event'])
   onMousemove(event: MouseEvent) {
-    if (this.supportResistanceLinesComponent) {
+    if (this.supportResistanceEnabled && this.supportResistanceLinesComponent) {
       this.supportResistanceLinesComponent.onMousemove(event);
     }
   }
 
   @HostListener('mouseleave')
   onMouseleave() {
-    if (this.supportResistanceLinesComponent) {
+    if (this.supportResistanceEnabled && this.supportResistanceLinesComponent) {
       this.supportResistanceLinesComponent.onMouseleave();
     }
   }
 
   @HostListener('dblclick')
   onDoubleClick() {
-    if (this.supportResistanceLinesComponent) {
+    if (this.supportResistanceEnabled && this.supportResistanceLinesComponent) {
       this.supportResistanceLinesComponent.onDoubleClick();
+    }
+  }
+
+  @HostListener('contextmenu', ['$event'])
+  onRightClick(event: MouseEvent) {
+    if (this.supportResistanceEnabled && this.supportResistanceLinesComponent) {
+      this.supportResistanceLinesComponent.onRightClick(event);
     }
   }
   // US Eastern Time market hours (in ET local time)

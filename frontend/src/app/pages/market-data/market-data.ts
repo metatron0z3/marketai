@@ -21,6 +21,7 @@ export class MarketDataPage implements OnInit {
   marketData: any[] = [];
   loading: boolean = false;
   error: string | null = null;
+  supportResistanceEnabled: boolean = false;
 
   constructor(
     private apiService: ApiService,
@@ -123,5 +124,9 @@ export class MarketDataPage implements OnInit {
     const end = this.endDate || 'Present';
 
     return `${start} to ${end}`;
+  }
+
+  toggleSupportResistance(): void {
+    this.supportResistanceEnabled = !this.supportResistanceEnabled;
   }
 }

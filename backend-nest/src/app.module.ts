@@ -6,6 +6,7 @@ import { DatabaseModule } from './database/database.module';
 import { InstrumentsModule } from './modules/instruments/instruments.module';
 import { MarketDataModule } from './modules/market-data/market-data.module';
 import { IngestModule } from './modules/ingest/ingest.module';
+import { SupportResistanceModule } from './modules/support-resistance/support-resistance.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -18,6 +19,7 @@ import configuration from './config/configuration';
     InstrumentsModule,
     MarketDataModule,
     IngestModule,
+    SupportResistanceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

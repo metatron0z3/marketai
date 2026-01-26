@@ -1,11 +1,10 @@
 <div class="chart-wrapper">
   <canvas #overlayCanvas class="session-overlay"></canvas>
-  <div #chartContainer class="chart-container">
-  <canvas #overlayCanvas class="overlay-canvas"></canvas>
+  <div #chartContainer class="chart-container"></div>
   <app-support-resistance-lines
     [chart]="chart"
     [chartContainer]="chartContainer"
     [candlestickSeries]="candlestickSeries"
+    [symbol]="symbol"
   ></app-support-resistance-lines>
-</div>
 </div>

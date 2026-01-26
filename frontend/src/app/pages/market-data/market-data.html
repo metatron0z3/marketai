@@ -31,6 +31,15 @@
         {{ loading ? 'Loading...' : 'Pull Data' }}
       </button>
     </div>
+
+    <div class="control-group">
+      <button
+        class="sr-toggle-button"
+        [class.active]="supportResistanceEnabled"
+        (click)="toggleSupportResistance()">
+        {{ supportResistanceEnabled ? 'S/R Lines: ON' : 'S/R Lines: OFF' }}
+      </button>
+    </div>
   </div>
 
   <div *ngIf="loading" class="loading">Loading market data...</div>
@@ -42,7 +51,11 @@
       <p class="date-range">{{ formatDateRange() }}</p>
       <p class="data-count">{{ marketData.length }} data points</p>
     </div>
-    <app-chart [data]="marketData"></app-chart>
+    <app-chart
+      [data]="marketData"
+      [symbol]="getSelectedSymbol()"
+      [supportResistanceEnabled]="supportResistanceEnabled">
+    </app-chart>
   </div>
 
   <div *ngIf="!loading && !error && (!marketData || marketData.length === 0)">
