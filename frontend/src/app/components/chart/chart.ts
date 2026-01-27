@@ -38,6 +38,7 @@ interface DaySession {
 export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input() data: any[] = [];
   @Input() symbol: string = '';
+  @Input() timeframe: string = '5min';
   @Input() supportResistanceEnabled: boolean = false;
   @ViewChild('chartContainer') chartContainer!: ElementRef;
   @ViewChild('overlayCanvas') overlayCanvas!: ElementRef<HTMLCanvasElement>;
@@ -335,6 +336,11 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     // Fill with market hours background first
     ctx.fillStyle = this.BG_MARKET;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Skip pre/post market overlay and day separators for 1hour and 1day timeframes
+    if (this.timeframe === '1hour' || this.timeframe === '1day') {
+      return;
+    }
 
     const timeScale = this.chart.timeScale();
 
