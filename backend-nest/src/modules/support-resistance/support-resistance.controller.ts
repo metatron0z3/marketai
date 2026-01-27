@@ -1,17 +1,17 @@
 import { Controller, Get, Post, Body } from '@nestjs/common';
-import { SupportResistanceService } from './support-resistance.service';
+import { SupportResistanceService, SupportResistanceData } from './support-resistance.service';
 
 @Controller('api/v1/support-resistance')
 export class SupportResistanceController {
   constructor(private readonly supportResistanceService: SupportResistanceService) {}
 
   @Get()
-  async getAll() {
+  async getAll(): Promise<SupportResistanceData> {
     return this.supportResistanceService.getAll();
   }
 
   @Post()
-  async save(@Body() data: Record<string, any>) {
+  async save(@Body() data: SupportResistanceData): Promise<{ success: boolean }> {
     return this.supportResistanceService.save(data);
   }
 }

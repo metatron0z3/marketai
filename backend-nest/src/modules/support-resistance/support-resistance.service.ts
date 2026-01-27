@@ -2,12 +2,12 @@ import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 
-interface SupportResistanceLine {
+export interface SupportResistanceLine {
   price: number;
   createdAt: string;
 }
 
-interface SupportResistanceData {
+export interface SupportResistanceData {
   [symbol: string]: SupportResistanceLine[];
 }
 
