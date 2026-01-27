@@ -25,6 +25,7 @@ export class SupportResistanceLinesComponent implements AfterViewInit, OnChanges
   @Input() chartContainer: HTMLElement | null = null;
   @Input() candlestickSeries: ISeriesApi<'Candlestick'> | null = null;
   @Input() symbol: string = '';
+  @Input() enabled: boolean = false;
   @ViewChild('supportResistanceCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
 
   private ctx: CanvasRenderingContext2D | null = null;
@@ -118,10 +119,33 @@ export class SupportResistanceLinesComponent implements AfterViewInit, OnChanges
     );
 
     if (lineToRemove) {
-      this.permanentLines = this.permanentLines.filter(line => line !== lineToRemove);
-      this.drawLines();
-      this.saveLines();
+      // Flash red before deleting
+      this.flashLineDelete(lineToRemove.price);
+
+      setTimeout(() => {
+        this.permanentLines = this.permanentLines.filter(line => line !== lineToRemove);
+        this.drawLines();
+        this.saveLines();
+      }, 150);
     }
+  }
+
+  private flashLineDelete(price: number) {
+    if (!this.ctx || !this.candlestickSeries) return;
+
+    const y = this.candlestickSeries.priceToCoordinate(price);
+    if (y === null) return;
+
+    const canvas = this.canvasRef.nativeElement;
+    const width = canvas.width;
+
+    // Draw red flash line
+    this.ctx.beginPath();
+    this.ctx.strokeStyle = '#ff4444';
+    this.ctx.lineWidth = 4;
+    this.ctx.moveTo(0, y);
+    this.ctx.lineTo(width, y);
+    this.ctx.stroke();
   }
 
   private setCanvasSize() {
@@ -143,13 +167,13 @@ export class SupportResistanceLinesComponent implements AfterViewInit, OnChanges
 
     this.ctx.clearRect(0, 0, width, height);
 
-    // Draw permanent lines
+    // Always draw permanent lines (regardless of enabled state)
     this.permanentLines.forEach(line => {
       this.drawLine(line.price, this.LINE_COLOR_PERMANENT, true);
     });
 
-    // Draw temporary hover line
-    if (this.currentHoveredPrice !== null) {
+    // Only draw hover line when enabled
+    if (this.enabled && this.currentHoveredPrice !== null) {
       this.drawLine(this.currentHoveredPrice, this.LINE_COLOR_HOVER, false);
     }
   }
