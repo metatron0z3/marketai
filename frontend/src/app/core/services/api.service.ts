@@ -58,4 +58,8 @@ export class ApiService {
   getIngestionJob(jobId: string): Observable<any> {
     return this.http.get<any>(`${this.apiUrl}/ingest/jobs/${jobId}`);
   }
+
+  getDataRanges(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/data-ranges`);
+  }
 }
