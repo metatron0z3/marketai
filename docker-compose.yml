@@ -68,8 +68,8 @@ services:
   # Python Service - Data Ingestion & ML
   python-service:
     build:
-      context: .
-      dockerfile: Dockerfile.python-service
+      context: ./python-service
+      dockerfile: Dockerfile
     container_name: market_python_service
     ports:
       - "8000:8000"
