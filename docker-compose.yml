@@ -11,18 +11,6 @@ services:
     networks:
       - market_network
 
-  ingest:
-    build:
-      context: .
-      dockerfile: Dockerfile.ingest
-    container_name: market_ingest
-    volumes:
-      - ./data:/src/data  # Adjust if you have data volumes
-    depends_on:
-      - questdb
-    networks:
-      - market_network
-
   # NestJS Backend - API Gateway
   nestjs-backend:
     build:
