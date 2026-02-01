@@ -15,7 +15,7 @@ export class ApiService {
   }
 
   getInstruments(): Observable<any[]> {
-    return this.http.get<any[]>(`${this.apiUrl}/instruments`);
+    return this.http.get<any[]>(`${this.apiUrl}/instruments/`);
   }
 
   getMarketData(instrumentId: number, timeframe: string, startDate?: string, endDate?: string): Observable<any[]> {
@@ -30,7 +30,33 @@ export class ApiService {
       params = params.set('end_date', endDate);
     }
 
-    return this.http.get<any[]>(`${this.apiUrl}/market-data`, { params });
+    return this.http.get<any[]>(`${this.apiUrl}/market-data/`, { params });
+  }
+
+  uploadAndIngest(formData: FormData, onProgress: (progress: number) => void): Observable<any> {
+    return this.http.post(`${this.apiUrl}/ingest/upload`, formData, {
+      reportProgress: true,
+      observe: 'events'
+    }).pipe(
+      map((event: HttpEvent<any>) => {
+        if (event.type === HttpEventType.UploadProgress) {
+          const progress = event.total ? Math.round((100 * event.loaded) / event.total) : 0;
+          onProgress(progress);
+        } else if (event.type === HttpEventType.Response) {
+          onProgress(100);
+          return event.body;
+        }
+        return null;
+      })
+    );
+  }
+
+  getIngestionJobs(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/ingest/jobs`);
+  }
+
+  getIngestionJob(jobId: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/ingest/jobs/${jobId}`);
   }
 
   uploadAndIngest(formData: FormData, onProgress: (progress: number) => void): Observable<any> {
