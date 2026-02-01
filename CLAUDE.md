@@ -305,7 +305,6 @@ location /api/ {
 | Python Service | http://localhost:8000 (internal) |
 | QuestDB Console | http://localhost:9000 |
 | Live Chart WS | ws://localhost:8082/ws |
-| Streamlit (legacy) | http://localhost:8501 |
 
 ---
 

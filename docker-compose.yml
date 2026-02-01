@@ -23,25 +23,6 @@ services:
     networks:
       - market_network
 
-  # New Streamlit service
-  streamlit:
-    build:
-      context: .
-      dockerfile: Dockerfile.streamlit
-    container_name: market_streamlit
-    ports:
-      - "8501:8501"
-    volumes:
-      - ./src:/src  # Mount local src directory to container
-    depends_on:
-      - ingest
-      - questdb
-    networks:
-      - market_network
-    environment:
-      - QUESTDB_HOST=questdb
-      - QUESTDB_PORT=9000
-
   # NestJS Backend - API Gateway
   nestjs-backend:
     build:
