@@ -125,6 +125,15 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
           timeVisible: true,
           secondsVisible: false,
           borderColor: '#2a2e39',
+          tickMarkFormatter: (time: number) => {
+            const date = new Date(time * 1000);
+            return date.toLocaleTimeString('en-US', {
+              timeZone: 'America/New_York',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            });
+          },
         },
         rightPriceScale: {
           borderColor: '#2a2e39',
@@ -376,15 +385,31 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       );
 
       // Draw pre-market background (gray)
-      if (preMarketX !== null && marketOpenX !== null) {
+      // Use left edge (0) if preMarketX is null/off-screen
+      const preMarketStart = preMarketX !== null && preMarketX >= 0 ? preMarketX : 0;
+      if (marketOpenX !== null && marketOpenX > preMarketStart) {
         ctx.fillStyle = this.BG_EXTENDED;
-        ctx.fillRect(preMarketX, 0, marketOpenX - preMarketX, canvas.height);
+        ctx.fillRect(preMarketStart, 0, marketOpenX - preMarketStart, canvas.height);
       }
 
       // Draw after-market background (gray)
-      if (marketCloseX !== null && afterMarketEndX !== null) {
-        ctx.fillStyle = this.BG_EXTENDED;
-        ctx.fillRect(marketCloseX, 0, afterMarketEndX - marketCloseX, canvas.height);
+      // Use right edge of canvas if afterMarketEndX is null/off-screen
+      if (marketCloseX !== null) {
+        // Find the end point: either afterMarketEndX, next day's preMarketX, or canvas edge
+        let afterMarketEndCoord: number | null = afterMarketEndX;
+        if (afterMarketEndCoord === null) {
+          // Check if there's a next day session
+          const nextSession = this.daySessions[index + 1];
+          if (nextSession) {
+            afterMarketEndCoord = timeScale.timeToCoordinate(nextSession.preMarketStart);
+          }
+        }
+        // If still null, use canvas width as fallback
+        const afterMarketEndFinal = afterMarketEndCoord !== null ? afterMarketEndCoord : canvas.width;
+        if (afterMarketEndFinal > marketCloseX) {
+          ctx.fillStyle = this.BG_EXTENDED;
+          ctx.fillRect(marketCloseX, 0, afterMarketEndFinal - marketCloseX, canvas.height);
+        }
       }
 
       // Draw day separator line (dashed yellow) at the start of each day except first

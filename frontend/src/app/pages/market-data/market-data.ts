@@ -29,9 +29,9 @@ export class MarketDataPage implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // Set default date range to demo data date (2024-01-02)
+    // Set default date range to available data (Jan 2024)
     this.startDate = '2024-01-02';
-    this.endDate = '2024-01-02';
+    this.endDate = '2024-01-03';
 
     this.fetchInstruments();
   }
