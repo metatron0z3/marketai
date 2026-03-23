@@ -45,7 +45,7 @@
     <app-test-render [marketData]="marketData"></app-test-render>
   </div>
 
-  <div *ngIf="!loading && !error && marketData.length === 0">
+  <div *ngIf="!loading && !error && (!marketData || marketData.length === 0)">
     No market data available for the selected criteria.
   </div>
 </div>

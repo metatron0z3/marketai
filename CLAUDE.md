@@ -2,343 +2,334 @@
 
 This document provides architecture context and development guidance for Claude Code instances working with the MarketAI repository.
 
-## Project Purpose
+## Project Status - Architecture Overview
 
-MarketAI is a Python-based pipeline for ingesting, storing, analyzing, and visualizing tick-by-tick (TBBO - Top of Book Best Bid/Offer) market data from Databento. The system is designed to:
+**Current Date:** 2026-01-25
+**Branch:** feature/nestjs-migration
 
-- Ingest compressed market data files (.dbn.zst format) from Databento
-- Store tick data in QuestDB, a high-performance time-series database
-- Engineer trading features from raw tick data
-- Visualize market microstructure through a Streamlit dashboard
+### Current Architecture
 
-**Key Technologies:**
-- Python 3.12
-- QuestDB (time-series database)
-- Docker & Docker Compose
-- Databento (market data provider)
-- Streamlit (visualization)
-- psycopg2 (PostgreSQL wire protocol)
-
-## Architecture Overview
-
-### Data Flow
 ```
-Databento .dbn.zst files → Ingest Service → QuestDB → Feature Engineering
-                                                    ↓
-                                              Streamlit Dashboard
+                    ┌─────────────────┐
+                    │  Angular FE     │
+                    │  (Port 4200)    │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+              ▼              ▼              ▼
+┌─────────────────┐ ┌───────────────┐ ┌─────────────────┐
+│  NestJS Backend │ │ Go Streaming  │ │ Python Service  │
+│  (Port 3000)    │ │ (Port 8082)   │ │ (Port 8000)     │
+│                 │ │               │ │                 │
+│ - Market Data   │ │ - WebSocket   │ │ - Data Ingest   │
+│ - Instruments   │ │ - Live Charts │ │ - databento     │
+│ - Orchestration │ │               │ │ - ML Pipeline   │
+└────────┬────────┘ └───────────────┘ └────────┬────────┘
+         │                                      │
+         └──────────────┬───────────────────────┘
+                        ▼
+              ┌─────────────────┐
+              │    QuestDB      │
+              │ (9000/8812)     │
+              └─────────────────┘
 ```
 
-### Service Architecture (Docker Compose)
+### Service Responsibilities
 
-The application runs three services orchestrated by Docker Compose:
+| Service | Language | Port | Responsibilities |
+|---------|----------|------|------------------|
+| **nestjs-backend** | TypeScript | 3000 | API gateway, market data, instruments, service orchestration |
+| **python-service** | Python | 8000 | Data ingestion (.dbn.zst), ML pipeline, feature engineering |
+| **streaming** | Go | 8082 | WebSocket streaming, live chart data |
+| **questdb** | - | 9000/8812 | Time-series database |
+| **frontend** | Angular | 4200 | Web UI, charting |
 
-1. **questdb** - Time-series database
-   - Ports: 9000 (HTTP/Web Console), 8812 (PostgreSQL wire), 9009 (ILP)
-   - Web Console: http://localhost:9000 (admin/quest)
-   - Volume: `questdb-data` for persistence
-   - Network: `market_network`
+### Why This Architecture?
 
-2. **ingest** - Data ingestion service
-   - Built from Dockerfile
-   - Mounts: ./data → /data, ./src → /src
-   - Depends on: questdb
-   - Environment: QUESTDB_HOST=questdb
+1. **NestJS as API Gateway**: Handles client requests, orchestrates services, provides type-safe API
+2. **Python for Data Science**: databento library, pandas, ML models - Python ecosystem is unmatched
+3. **Go for Streaming**: High-performance WebSocket handling, low latency
+4. **QuestDB**: Purpose-built time-series database for market data
 
-3. **streamlit** - Visualization dashboard
-   - Port: 8501
-   - Mounts: ./src → /src
-   - Depends on: questdb
-   - Environment: QUESTDB_HOST=questdb, QUESTDB_PORT=8812
+---
 
-### Database Schema
+## NestJS Backend Structure
+
+```
+backend-nest/
+├── src/
+│   ├── main.ts                 # Application entry point
+│   ├── app.module.ts           # Root module
+│   ├── app.controller.ts       # Root controller (health, db-status)
+│   ├── app.service.ts          # Root service
+│   ├── config/
+│   │   └── configuration.ts    # Environment config
+│   ├── database/
+│   │   ├── database.module.ts  # Database module
+│   │   └── questdb.service.ts  # QuestDB connection pool
+│   └── modules/
+│       ├── instruments/
+│       │   ├── instruments.module.ts
+│       │   ├── instruments.controller.ts
+│       │   ├── instruments.service.ts
+│       │   └── dto/instrument.dto.ts
+│       ├── market-data/
+│       │   ├── market-data.module.ts
+│       │   ├── market-data.controller.ts
+│       │   ├── market-data.service.ts
+│       │   └── dto/
+│       │       ├── market-data-query.dto.ts
+│       │       └── ohlcv.dto.ts
+│       └── ingest/
+│           ├── ingest.module.ts
+│           ├── ingest.controller.ts  # Proxies to Python service
+│           ├── ingest.service.ts
+│           └── dto/ingest.dto.ts
+├── package.json
+├── tsconfig.json
+├── nest-cli.json
+└── Dockerfile
+```
+
+---
+
+## Python Service Structure
+
+The Python service handles tasks requiring the Python data science ecosystem:
+
+```
+python-service/
+├── app/
+│   ├── main.py                 # FastAPI entry
+│   ├── api/
+│   │   └── v1/
+│   │       ├── api.py          # Router setup
+│   │       └── endpoints/
+│   │           ├── instruments.py  # (deprecated, use NestJS)
+│   │           ├── market_data.py  # (deprecated, use NestJS)
+│   │           └── ingest.py       # File upload & processing
+│   ├── core/
+│   │   └── db.py               # QuestDB connection
+│   └── models/
+│       └── static_data/        # Static data files
+└── requirements.txt
+```
+
+**Active Endpoints (Python Service):**
+- `POST /api/v1/ingest/upload` - Upload .dbn.zst files
+- `GET /api/v1/ingest/jobs` - List ingest jobs
+- `GET /api/v1/ingest/jobs/{id}` - Job status
+
+---
+
+## Database Schema
 
 **Table: `trades_data`**
-- Primary timestamp column: `ts_event` (designated timestamp)
-- Partition strategy: `PARTITION BY DAY` on `ts_event`
-- Schema includes: instrument_id, action, side, price, size, flags, ts_recv, ts_in_delta, sequence
+```sql
+CREATE TABLE IF NOT EXISTS trades_data (
+    ts_recv TIMESTAMP,
+    ts_event TIMESTAMP,
+    rtype INT,
+    publisher_id INT,
+    instrument_id INT,
+    action SYMBOL,
+    side SYMBOL,
+    depth INT,
+    price DOUBLE,
+    size LONG,
+    flags INT,
+    ts_in_delta LONG,
+    sequence LONG
+) TIMESTAMP(ts_event) PARTITION BY DAY;
+```
 
 **Symbol Mapping:**
-- SPY: instrument_id = 15144
-- QQQ: instrument_id = 13340
-- TSLA: instrument_id = 16244
+| Symbol | instrument_id |
+|--------|---------------|
+| SPY    | 15144         |
+| QQQ    | 13340         |
+| TSLA   | 16244         |
 
-### Connection Protocols
+---
 
-QuestDB supports multiple protocols - this project uses two:
+## Docker Compose Services
 
-1. **HTTP API (port 9000)** - Used by ingest_cli.py for bulk data insertion and by Streamlit dashboard for data queries
-2. **PostgreSQL wire protocol (port 8812)** - Used by feature_engineering.py via psycopg2
+```yaml
+services:
+  questdb:
+    image: questdb/questdb:latest
+    ports:
+      - "9000:9000"   # HTTP API
+      - "8812:8812"   # PostgreSQL wire
 
-## Common Development Commands
+  nestjs-backend:
+    build: ./backend-nest
+    ports:
+      - "3000:3000"
+    environment:
+      - QUESTDB_HOST=questdb
+      - QUESTDB_PORT=8812
+      - PYTHON_SERVICE_URL=http://python-service:8000
+
+  python-service:
+    dockerfile: Dockerfile.python-service
+    ports:
+      - "8000:8000"
+    environment:
+      - QUESTDB_HOST=questdb
+      - QUESTDB_PORT=9000
+
+  streaming:
+    build: ./streaming
+    ports:
+      - "8082:8082"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "4200:80"
+```
+
+---
+
+## Common Commands
 
 ### Docker Operations
-
 ```bash
-# Start all services (build if needed)
+# Start all services
 docker-compose up --build
 
-# Start services in detached mode
-docker-compose up -d
+# Rebuild specific service
+docker-compose build nestjs-backend
 
-# Stop all services
-docker-compose down
+# View logs
+docker-compose logs -f nestjs-backend
+docker-compose logs -f python-service
 
-# Force rebuild without cache
-docker-compose build --no-cache
-
-# View logs from all services
-docker-compose logs
-
-# View logs from specific service
-docker-compose logs questdb
-docker-compose logs ingest
-docker-compose logs streamlit
-
-# Execute commands in running container
-docker-compose exec questdb /bin/bash
-docker-compose exec ingest /bin/bash
+# Shell into container
+docker-compose exec nestjs-backend sh
 ```
 
-### Ingest CLI Commands
-
-The ingest CLI (`src/ingest_cli.py`) provides commands for data ingestion:
-
+### NestJS Development
 ```bash
-# Test database connection
-python ingest_cli.py test-connection
-
-# Create the trades_data table
-python ingest_cli.py create-table
-
-# List available .dbn.zst files
-python ingest_cli.py list-files
-
-# Process a specific file
-python ingest_cli.py process-file <filename>
-
-# Process all files in data directory
-python ingest_cli.py process-all
-
-# Process with custom batch size
-python ingest_cli.py process-file <filename> --batch-size 100
-```
-
-### Local Development Setup
-
-```bash
-# Create virtual environment
-python3 -m venv venv
-
-# Activate virtual environment
-source venv/bin/activate
+cd backend-nest
 
 # Install dependencies
-pip install -r requirements.txt
+npm install
 
-# Run Streamlit locally
-streamlit run src/market_view_day.py
+# Run in development
+npm run start:dev
+
+# Build for production
+npm run build
+
+# Run tests
+npm run test
 ```
 
 ### QuestDB Access
+- Web Console: http://localhost:9000
+- PostgreSQL: `psql -h localhost -p 8812 -U admin -d qdb`
 
-**Web Console:**
-- URL: http://localhost:9000
-- Credentials: admin / quest
-- Use for: SQL queries, table inspection, system monitoring
+---
 
-**PostgreSQL Wire Protocol:**
-- Host: localhost
-- Port: 8812
-- User: admin
-- Password: quest
-- Use for: psycopg2 connections, feature engineering, analytics
+## API Routes
 
-**Example psycopg2 connection:**
-```python
-import psycopg2
-conn = psycopg2.connect(
-    host='localhost',
-    port=8812,
-    user='admin',
-    password='quest',
-    database='qdb'
-)
+### NestJS Backend (Port 3000)
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | / | Welcome message |
+| GET | /health | Health check |
+| GET | /db-status | Database connection status |
+| GET | /api/v1/instruments | List all instruments |
+| GET | /api/v1/instruments/:symbol | Get instrument by symbol |
+| GET | /api/v1/market-data | Get OHLCV data (query params: instrument_id, timeframe, start_date, end_date) |
+| POST | /api/v1/ingest/upload | Proxy to Python service |
+| GET | /api/v1/ingest/jobs | Proxy to Python service |
+| GET | /api/v1/ingest/jobs/:id | Proxy to Python service |
+
+### Swagger Documentation
+- Available at: http://localhost:3000/api/docs
+
+---
+
+## Environment Variables
+
+### NestJS Backend
+```env
+NODE_ENV=development
+PORT=3000
+QUESTDB_HOST=questdb
+QUESTDB_PORT=8812
+QUESTDB_USER=admin
+QUESTDB_PASSWORD=quest
+QUESTDB_DATABASE=qdb
+PYTHON_SERVICE_URL=http://python-service:8000
 ```
 
-## Key Implementation Details
-
-### Data Format & Processing
-
-**Databento Files:**
-- Format: `.dbn.zst` (Zstandard compressed binary format)
-- Location: `./data/` directory (mounted to `/data` in containers)
-- Decompression: Handled automatically by `databento` Python library
-
-**Data Transformations:**
-- **Price scaling**: Divide raw price values by 1e9 to get decimal prices
-- **Timestamp scaling**: Divide by 1000 to convert from nanoseconds to milliseconds
-- **Batch processing**: Default batch size is 50 records (configurable via --batch-size)
-
-**Ingestion Process:**
-1. Open .dbn.zst file using databento library
-2. Iterate through records in batches
-3. Transform prices and timestamps
-4. Map instrument_id to symbols
-5. Insert batches via QuestDB HTTP API
-
-### Feature Engineering
-
-**Implementation:** `src/feature_engineering.py`
-
-**Main Class:** `TradingFeatureEngineer`
-- Connects via psycopg2 on port 8812
-- Processes data from `trades_data` table
-- Creates 6 feature tables with engineered features
-
-**Generated Feature Tables:**
-1. `price_features` - Price-based metrics (returns, volatility, spread)
-2. `volume_features` - Volume analysis (VWAP, volume ratios)
-3. `microstructure_features` - Market microstructure (effective spread, order flow imbalance)
-4. `technical_features` - Technical indicators (RSI, Bollinger Bands, moving averages)
-5. `advanced_features` - Advanced metrics (intraday returns, volume profiles)
-6. `support_resistance_levels` - Price levels and volume clusters
-
-**Usage Pattern:**
-```python
-engineer = TradingFeatureEngineer(
-    host='localhost',
-    port=8812,
-    user='admin',
-    password='quest'
-)
-engineer.create_all_features(symbol='SPY', date='2024-01-02')
+### Python Service
+```env
+QUESTDB_HOST=questdb
+QUESTDB_PORT=9000
 ```
 
-### Streamlit Dashboard
+---
 
-**Implementation:** `src/market_view_day.py`
+## Frontend Configuration
 
-**Key Features:**
-- Date and symbol selector in sidebar
-- Interactive candlestick charts with 5-minute OHLC candles
-- Data summary metrics (total trades, price range, volume)
-- Real-time data fetching from QuestDB via HTTP API
-- Default demo date: 2024-01-02
+### API Base URL
+The frontend connects to the NestJS backend:
+```typescript
+// frontend/src/app/core/environment.ts
+export const API_BASE_URL = 'http://localhost:3000/api/v1';
+```
 
-**Symbol Configuration:**
-The dashboard uses the symbol mapping defined at module level:
-```python
-SYMBOL_MAP = {
-    'SPY': 15144,
-    'QQQ': 13340,
-    'TSLA': 16244
+### Nginx Proxy (Production)
+The nginx config proxies `/api/` to the NestJS backend:
+```nginx
+location /api/ {
+    proxy_pass http://nestjs-backend:3000;
 }
 ```
 
-**Environment Variables:**
-- `QUESTDB_HOST` - QuestDB hostname (default: questdb in Docker, localhost for local development)
-- `QUESTDB_PORT` - HTTP API port (default: 9000)
+---
 
-**Connection Pattern:**
-The dashboard uses the HTTP API via the requests library:
-```python
-QUESTDB_HOST = os.getenv("QUESTDB_HOST", "questdb")
-QUESTDB_PORT = os.getenv("QUESTDB_PORT", "9000")
-QUESTDB_URL = f"http://{QUESTDB_HOST}:{QUESTDB_PORT}/exec"
+## Access URLs
 
-response = requests.get(QUESTDB_URL, params={"query": query})
-```
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:4200 |
+| NestJS API | http://localhost:3000 |
+| Swagger Docs | http://localhost:3000/api/docs |
+| Python Service | http://localhost:8000 (internal) |
+| QuestDB Console | http://localhost:9000 |
+| Live Chart WS | ws://localhost:8082/ws |
 
-### File Structure
+---
 
-```
-marketai/
-├── docker-compose.yml       # Service orchestration
-├── Dockerfile              # Container build config
-├── requirements.txt        # Python dependencies
-├── data/                   # .dbn.zst data files
-├── cli/
-│   └── questdb_cmds       # QuestDB CLI helpers
-└── src/
-    ├── ingest_cli.py      # Main ingestion CLI (398 LOC)
-    ├── feature_engineering.py  # Feature pipeline (491 LOC)
-    ├── market_view_day.py # Streamlit dashboard (222 LOC)
-    ├── ml_pipeline.py     # Machine learning pipeline
-    └── feature_advanced   # Advanced feature modules
-```
+## Data Ingestion Flow
 
-## Important Conventions & Patterns
+1. User uploads `.dbn.zst` or `.zip` file via frontend
+2. Frontend sends to NestJS backend (`POST /api/v1/ingest/upload`)
+3. NestJS proxies request to Python service
+4. Python service processes file using `databento` library
+5. Records inserted into QuestDB via PostgreSQL wire protocol
+6. Job status available via polling `/api/v1/ingest/jobs/{id}`
 
-### Configuration Defaults
-- **Batch size**: 50 records (configurable via --batch-size flag)
-- **Docker network**: `market_network` (defined in docker-compose.yml)
-- **QuestDB volume**: `questdb-data` (persistent storage)
-- **Data mount**: `./data` → `/data` in containers
+---
 
-### Database Best Practices
-- Always use `ts_event` as the designated timestamp for queries
-- Leverage `PARTITION BY DAY` when querying specific dates
-- Use batch inserts for performance (HTTP API supports bulk operations)
-- PostgreSQL wire protocol is preferred for complex queries and analytics
+## Development Workflow
 
-### Development Workflow
 1. Start services: `docker-compose up --build`
 2. Verify QuestDB: http://localhost:9000
-3. Create table: `python ingest_cli.py create-table`
-4. Ingest data: `python ingest_cli.py process-all`
-5. Generate features: Run feature_engineering.py
-6. View dashboard: http://localhost:8501
+3. Verify NestJS: http://localhost:3000/health
+4. View frontend: http://localhost:4200
+5. Check API docs: http://localhost:3000/api/docs
 
-### Common Troubleshooting
-
-**QuestDB connection issues:**
-- Check if QuestDB container is running: `docker-compose ps`
-- Verify ports are not in use: `lsof -i :9000` or `lsof -i :8812`
-- Check logs: `docker-compose logs questdb`
-
-**Data ingestion errors:**
-- Verify .dbn.zst files exist in ./data directory
-- Check file permissions
-- Verify table schema matches expected format
-- Review batch size if memory issues occur
-
-**Streamlit display issues:**
-- Ensure data exists for selected date and symbol
-- Check QuestDB connection from Streamlit container
-- Verify feature tables have been created
-
-## Development Tips
-
-### Adding New Symbols
-1. Identify instrument_id from Databento data
-2. Update `SYMBOL_MAP` in market_view_day.py
-3. Update documentation with new mapping
-
-### Modifying Database Schema
-1. Drop existing table: `DROP TABLE trades_data;`
-2. Update CREATE TABLE statement in ingest_cli.py
-3. Run: `python ingest_cli.py create-table`
-4. Re-ingest data
-
-### Performance Optimization
-- QuestDB performs best with batched inserts (50-100 records)
-- Use date filters in queries to leverage partitioning
-- Index frequently queried columns (instrument_id)
-- Monitor QuestDB logs for slow queries
-
-### Testing Connection Flow
-```bash
-# 1. Test QuestDB HTTP API
-curl http://localhost:9000/
-
-# 2. Test from ingest container
-docker-compose exec ingest python ingest_cli.py test-connection
-
-# 3. Test PostgreSQL wire from host
-psql -h localhost -p 8812 -U admin -d qdb
-```
+---
 
 ## Related Documentation
 - QuestDB Documentation: https://questdb.io/docs/
 - Databento API: https://databento.com/docs/
-- Project README: ./README.md
+- NestJS Documentation: https://docs.nestjs.com/

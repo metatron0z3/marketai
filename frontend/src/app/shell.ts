@@ -14,7 +14,9 @@ import { RouterModule } from '@angular/router';
         </div>
         <div class="navbar-menu">
           <a routerLink="/market-data" routerLinkActive="active" class="nav-link">Market Data</a>
+          <a routerLink="/animated-chart" routerLinkActive="active" class="nav-link">Live Chart</a>
           <a routerLink="/ingest" routerLinkActive="active" class="nav-link">Data Ingestion</a>
+          <a routerLink="/data-ranges" routerLinkActive="active" class="nav-link">Data Ranges</a>
         </div>
       </nav>
       <div class="content">

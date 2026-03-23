@@ -10,47 +10,40 @@ services:
       - questdb-data:/var/lib/questdb
     networks:
       - market_network
-  
-  ingest:
-    build: 
-      context: .
-      dockerfile: Dockerfile.ingest
-    container_name: market_ingest 
-    volumes:
-      - ./data:/src/data  # Adjust if you have data volumes
-    depends_on:
-      - questdb
-    networks:
-      - market_network
 
-  # New Streamlit service
-  streamlit:
+  # NestJS Backend - API Gateway
+  nestjs-backend:
     build:
-      context: .
-      dockerfile: Dockerfile.streamlit
-    container_name: market_streamlit
+      context: ./backend-nest
+      dockerfile: Dockerfile
+    container_name: market_nestjs_backend
     ports:
-      - "8501:8501"
-    volumes:
-      - ./src:/src  # Mount local src directory to container
+      - "3000:3000"
     depends_on:
-      - ingest
       - questdb
+      - python-service
     networks:
       - market_network
     environment:
+      - NODE_ENV=production
+      - PORT=3000
       - QUESTDB_HOST=questdb
-      - QUESTDB_PORT=9000
+      - QUESTDB_PORT=8812
+      - QUESTDB_USER=admin
+      - QUESTDB_PASSWORD=quest
+      - QUESTDB_DATABASE=qdb
+      - PYTHON_SERVICE_URL=http://python-service:8000
 
-  backend:
+  # Python Service - Data Ingestion & ML
+  python-service:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
-    container_name: market_backend
+      context: ./python-service
+      dockerfile: Dockerfile
+    container_name: market_python_service
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/app:/app/app # Mount local backend app directory for development
+      - ./python-service/app:/app/app # Mount local app directory for development
     depends_on:
       - questdb
     networks:
@@ -59,6 +52,31 @@ services:
       - QUESTDB_HOST=questdb
       - QUESTDB_PORT=9000
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: market_frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - nestjs-backend
+    networks:
+      - market_network
+
+  streaming:
+    build:
+      context: ./streaming
+      dockerfile: Dockerfile
+    container_name: market_streaming
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./python-service/app/models/static_data:/app/static_data
+    depends_on:
+      - questdb
+    networks:
+      - market_network
 
 volumes:
   questdb-data:

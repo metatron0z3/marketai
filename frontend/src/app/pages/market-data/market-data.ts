@@ -2,12 +2,12 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
-import { TestRender } from '../../components/test-render/test-render';
+import { ChartComponent } from '../../components/chart/chart';
 
 @Component({
   selector: 'app-market-data',
   standalone: true,
-  imports: [CommonModule, FormsModule, TestRender],
+  imports: [CommonModule, FormsModule, ChartComponent],
   templateUrl: './market-data.html',
   styleUrl: './market-data.scss'
 })
@@ -21,6 +21,7 @@ export class MarketDataPage implements OnInit {
   marketData: any[] = [];
   loading: boolean = false;
   error: string | null = null;
+  supportResistanceEnabled: boolean = false;
 
   constructor(
     private apiService: ApiService,
@@ -28,13 +29,9 @@ export class MarketDataPage implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // Set default date range (last 7 days)
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 7);
-
-    this.startDate = startDate.toISOString().split('T')[0];
-    this.endDate = endDate.toISOString().split('T')[0];
+    // Set default date range to available data (Jan 2024)
+    this.startDate = '2024-01-02';
+    this.endDate = '2024-01-03';
 
     this.fetchInstruments();
   }
@@ -127,5 +124,9 @@ export class MarketDataPage implements OnInit {
     const end = this.endDate || 'Present';
 
     return `${start} to ${end}`;
+  }
+
+  toggleSupportResistance(): void {
+    this.supportResistanceEnabled = !this.supportResistanceEnabled;
   }
 }

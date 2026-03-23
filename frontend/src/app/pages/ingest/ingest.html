@@ -8,7 +8,7 @@
       <div class="form-row">
         <div class="form-group">
           <label for="table-select">Target Table:</label>
-          <select id="table-select" [(ngModel)]="selectedTable" [disabled]="isUploading">
+          <select id="table-select" [(ngModel)]="selectedTable" [disabled]="isProcessing">
             <option *ngFor="let table of availableTables" [value]="table">{{ table }}</option>
           </select>
         </div>
@@ -16,18 +16,36 @@
 
       <div class="form-row">
         <div class="form-group file-input-group">
-          <label for="file-input">Data File (.dbn.zst or .zip):</label>
+          <label>Select Folder with .dbn.zst files:</label>
           <div class="file-input-wrapper">
             <input
               type="file"
-              id="file-input"
-              (change)="onFileSelected($event)"
-              accept=".dbn.zst,.zip"
-              [disabled]="isUploading"
+              id="folder-input"
+              (change)="onFolderSelected($event)"
+              webkitdirectory
+              directory
+              multiple
+              [disabled]="isProcessing"
             />
-            <div class="file-name" *ngIf="selectedFileName">
-              Selected: <strong>{{ selectedFileName }}</strong>
+            <div class="file-name" *ngIf="selectedFiles.length > 0">
+              Selected: <strong>{{ selectedFiles.length }} .dbn.zst files</strong>
+              <span class="total-size">({{ formatBytes(totalSize) }})</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div *ngIf="selectedFiles.length > 0" class="selected-files-preview">
+        <div class="preview-header">
+          <span>Files to upload:</span>
+          <button class="clear-button" (click)="clearSelection()" [disabled]="isProcessing">Clear</button>
+        </div>
+        <div class="files-list">
+          <div *ngFor="let file of selectedFiles.slice(0, 10)" class="file-item">
+            {{ file.name }} ({{ formatBytes(file.size) }})
+          </div>
+          <div *ngIf="selectedFiles.length > 10" class="more-files">
+            ... and {{ selectedFiles.length - 10 }} more files
           </div>
         </div>
       </div>
@@ -35,16 +53,25 @@
       <div class="form-row">
         <button
           class="upload-button"
-          (click)="uploadAndIngest()"
-          [disabled]="!selectedFile || isUploading"
+          (click)="startBatchUpload()"
+          [disabled]="selectedFiles.length === 0 || isProcessing"
         >
-          {{ isUploading ? 'Uploading...' : 'Upload and Ingest' }}
+          {{ isProcessing ? 'Processing...' : 'Upload and Ingest All' }}
         </button>
       </div>
 
-      <div *ngIf="isUploading" class="progress-bar">
-        <div class="progress-fill" [style.width.%]="uploadProgress"></div>
-        <span class="progress-text">{{ uploadProgress }}%</span>
+      <div *ngIf="isProcessing" class="batch-progress">
+        <div class="batch-status">
+          <span class="current-file">{{ currentFileName }}</span>
+          <span class="file-counter">File {{ currentFileIndex + 1 }} of {{ selectedFiles.length }}</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="uploadProgress"></div>
+          <span class="progress-text">{{ uploadProgress }}%</span>
+        </div>
+        <div class="overall-progress">
+          Overall: {{ completedFiles }} / {{ selectedFiles.length }} files completed
+        </div>
       </div>
 
       <div *ngIf="error" class="error-message">
@@ -56,13 +83,13 @@
   <div class="jobs-section">
     <div class="section-header">
       <h2>Ingestion Jobs</h2>
-      <button class="refresh-button" (click)="refreshJobs()" [disabled]="isUploading">
+      <button class="refresh-button" (click)="refreshJobs()" [disabled]="isProcessing">
         Refresh
       </button>
     </div>
 
     <div *ngIf="jobs.length === 0" class="no-jobs">
-      No ingestion jobs yet. Upload a file to get started.
+      No ingestion jobs yet. Select a folder to get started.
     </div>
 
     <table *ngIf="jobs.length > 0" class="jobs-table">
