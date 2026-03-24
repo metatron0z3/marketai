@@ -17,6 +17,10 @@ import {
   CandlestickData,
   UTCTimestamp,
   CandlestickSeries,
+  LineSeries,
+  HistogramSeries,
+  LineData,
+  HistogramData,
 } from 'lightweight-charts';
 import { SupportResistanceLinesComponent } from '../support-resistance-lines/support-resistance-lines';
 
@@ -40,8 +44,11 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input() symbol: string = '';
   @Input() timeframe: string = '5min';
   @Input() supportResistanceEnabled: boolean = false;
+  @Input() indicators: { [key: string]: boolean } = {};
+  @Input() indicatorData: { [key: string]: any } = {};
   @ViewChild('chartContainer') chartContainer!: ElementRef;
   @ViewChild('overlayCanvas') overlayCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('rsiContainer') rsiContainer?: ElementRef;
   @ViewChild(SupportResistanceLinesComponent)
   supportResistanceLinesComponent!: SupportResistanceLinesComponent;
 
@@ -49,6 +56,20 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   public candlestickSeries: ISeriesApi<'Candlestick'> | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private daySessions: DaySession[] = [];
+
+  // Indicator series references
+  private indicatorSeries: { [key: string]: ISeriesApi<any> | null } = {
+    vwap: null,
+    ma7: null,
+    ma20: null,
+    ma200: null,
+    bbUpper: null,
+    bbMiddle: null,
+    bbLower: null,
+    volume: null
+  };
+  private rsiChart: IChartApi | null = null;
+  private rsiLineSeries: ISeriesApi<'Line'> | null = null;
 
   @HostListener('mousemove', ['$event'])
   onMousemove(event: MouseEvent) {
@@ -176,6 +197,9 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['data'] && this.chart) {
       this.updateChartData();
+    }
+    if ((changes['indicators'] || changes['indicatorData']) && this.chart) {
+      this.updateIndicators();
     }
   }
 
@@ -442,8 +466,219 @@ export class ChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     }
   }
 
+  private updateIndicators(): void {
+    if (!this.chart) return;
+
+    // Update overlay indicators (VWAP, MAs, Bollinger Bands)
+    this.updateIndicatorSeries('vwap', '#2196F3', 'vwap');
+    this.updateIndicatorSeries('ma7', '#FFD700', 'ma');
+    this.updateIndicatorSeries('ma20', '#00BCD4', 'ma');
+    this.updateIndicatorSeries('ma200', '#FF5252', 'ma');
+    this.updateBollingerBandsSeries();
+    this.updateVolumeSeries();
+    this.updateRsiChart();
+  }
+
+  private updateIndicatorSeries(indicatorName: string, color: string, dataKey: string): void {
+    if (!this.chart) return;
+
+    const isEnabled = this.indicators[indicatorName];
+    const data = this.indicatorData[indicatorName];
+
+    if (isEnabled && data && data.data) {
+      if (!this.indicatorSeries[indicatorName]) {
+        // Create series
+        this.indicatorSeries[indicatorName] = this.chart.addSeries(LineSeries, {
+          color,
+          lineWidth: 1,
+        });
+      }
+      // Update data
+      const lineData: LineData<UTCTimestamp>[] = data.data
+        .map((d: any) => ({
+          time: (new Date(d.timestamp).getTime() / 1000) as UTCTimestamp,
+          value: d[dataKey] !== null ? d[dataKey] : undefined
+        }))
+        .filter((d: any) => d.value !== undefined);
+      this.indicatorSeries[indicatorName]!.setData(lineData);
+    } else if (!isEnabled && this.indicatorSeries[indicatorName]) {
+      // Remove series
+      this.chart.removeSeries(this.indicatorSeries[indicatorName]!);
+      this.indicatorSeries[indicatorName] = null;
+    }
+  }
+
+  private updateBollingerBandsSeries(): void {
+    if (!this.chart) return;
+
+    const isEnabled = this.indicators['bollingerBands'];
+    const data = this.indicatorData['bollingerBands'];
+
+    if (isEnabled && data && data.data) {
+      // Create or update upper band
+      if (!this.indicatorSeries['bbUpper']) {
+        this.indicatorSeries['bbUpper'] = this.chart.addSeries(LineSeries, {
+          color: '#B0BEC5',
+          lineWidth: 1,
+          lineStyle: 2, // dashed
+        });
+      }
+      const upperData: LineData<UTCTimestamp>[] = data.data
+        .map((d: any) => ({
+          time: (new Date(d.timestamp).getTime() / 1000) as UTCTimestamp,
+          value: d.upper !== null ? d.upper : undefined
+        }))
+        .filter((d: any) => d.value !== undefined);
+      this.indicatorSeries['bbUpper']!.setData(upperData);
+
+      // Create or update middle band
+      if (!this.indicatorSeries['bbMiddle']) {
+        this.indicatorSeries['bbMiddle'] = this.chart.addSeries(LineSeries, {
+          color: '#78909C',
+          lineWidth: 1,
+        });
+      }
+      const middleData: LineData<UTCTimestamp>[] = data.data
+        .map((d: any) => ({
+          time: (new Date(d.timestamp).getTime() / 1000) as UTCTimestamp,
+          value: d.middle !== null ? d.middle : undefined
+        }))
+        .filter((d: any) => d.value !== undefined);
+      this.indicatorSeries['bbMiddle']!.setData(middleData);
+
+      // Create or update lower band
+      if (!this.indicatorSeries['bbLower']) {
+        this.indicatorSeries['bbLower'] = this.chart.addSeries(LineSeries, {
+          color: '#B0BEC5',
+          lineWidth: 1,
+          lineStyle: 2, // dashed
+        });
+      }
+      const lowerData: LineData<UTCTimestamp>[] = data.data
+        .map((d: any) => ({
+          time: (new Date(d.timestamp).getTime() / 1000) as UTCTimestamp,
+          value: d.lower !== null ? d.lower : undefined
+        }))
+        .filter((d: any) => d.value !== undefined);
+      this.indicatorSeries['bbLower']!.setData(lowerData);
+    } else if (!isEnabled) {
+      // Remove all three bands
+      if (this.indicatorSeries['bbUpper']) {
+        this.chart.removeSeries(this.indicatorSeries['bbUpper']);
+        this.indicatorSeries['bbUpper'] = null;
+      }
+      if (this.indicatorSeries['bbMiddle']) {
+        this.chart.removeSeries(this.indicatorSeries['bbMiddle']);
+        this.indicatorSeries['bbMiddle'] = null;
+      }
+      if (this.indicatorSeries['bbLower']) {
+        this.chart.removeSeries(this.indicatorSeries['bbLower']);
+        this.indicatorSeries['bbLower'] = null;
+      }
+    }
+  }
+
+  private updateVolumeSeries(): void {
+    if (!this.chart) return;
+
+    const isEnabled = this.indicators['volume'];
+    const data = this.indicatorData['volume'];
+
+    if (isEnabled && data && data.data) {
+      if (!this.indicatorSeries['volume']) {
+        // Create volume series with separate price scale
+        this.indicatorSeries['volume'] = this.chart.addSeries(HistogramSeries, {
+          color: '#26a69a',
+          priceScaleId: 'volume',
+        });
+        // Set price scale margins to put volume at bottom
+        this.chart.priceScale('volume').applyOptions({
+          scaleMargins: { top: 0.85, bottom: 0 }
+        });
+      }
+      // Update data
+      const histData: HistogramData<UTCTimestamp>[] = data.data
+        .map((d: any) => ({
+          time: (new Date(d.timestamp).getTime() / 1000) as UTCTimestamp,
+          value: d.volume !== null ? d.volume : 0
+        }));
+      this.indicatorSeries['volume']!.setData(histData);
+    } else if (!isEnabled && this.indicatorSeries['volume']) {
+      // Remove series
+      this.chart.removeSeries(this.indicatorSeries['volume']);
+      this.indicatorSeries['volume'] = null;
+    }
+  }
+
+  private updateRsiChart(): void {
+    const isEnabled = this.indicators['rsi'];
+    const data = this.indicatorData['rsi'];
+
+    if (isEnabled && data && data.data && this.rsiContainer) {
+      if (!this.rsiChart) {
+        // Create RSI chart
+        const container = this.rsiContainer.nativeElement;
+        this.rsiChart = createChart(container, {
+          width: container.clientWidth,
+          height: 120,
+          layout: {
+            background: { color: '#1a1a1a' },
+            textColor: '#d1d4dc',
+          },
+          grid: {
+            vertLines: {
+              color: 'rgba(42, 46, 57, 0.5)',
+            },
+            horzLines: {
+              color: 'rgba(42, 46, 57, 0.5)',
+            },
+          },
+          rightPriceScale: {
+            borderColor: '#2a2e39',
+            scaleMargins: { top: 0.1, bottom: 0.1 },
+          },
+          timeScale: {
+            visible: false,
+          },
+          crosshair: {
+            mode: 1,
+            vertLine: {
+              color: '#758696',
+              width: 1,
+              style: 2,
+              labelBackgroundColor: '#2a2e39',
+            },
+            horzLine: {
+              color: '#758696',
+              labelBackgroundColor: '#2a2e39',
+            },
+          },
+        });
+        this.rsiLineSeries = this.rsiChart.addSeries(LineSeries, {
+          color: '#EE82EE',
+          lineWidth: 1,
+        });
+      }
+      // Update RSI data
+      const rsiData: LineData<UTCTimestamp>[] = data.data
+        .map((d: any) => ({
+          time: (new Date(d.timestamp).getTime() / 1000) as UTCTimestamp,
+          value: d.rsi !== null ? d.rsi : undefined
+        }))
+        .filter((d: any) => d.value !== undefined);
+      this.rsiLineSeries!.setData(rsiData);
+      this.rsiChart.timeScale().fitContent();
+    } else if (!isEnabled && this.rsiChart) {
+      // Remove RSI chart
+      this.rsiChart.remove();
+      this.rsiChart = null;
+      this.rsiLineSeries = null;
+    }
+  }
+
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
     this.chart?.remove();
+    this.rsiChart?.remove();
   }
 }
