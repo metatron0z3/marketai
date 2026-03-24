@@ -42,6 +42,17 @@
     </div>
   </div>
 
+  <div class="indicator-controls">
+    <span class="indicator-label">Indicators:</span>
+    <button class="indicator-btn indicator-rsi" [class.active]="indicators['rsi']" (click)="toggleIndicator('rsi')">RSI</button>
+    <button class="indicator-btn indicator-vwap" [class.active]="indicators['vwap']" (click)="toggleIndicator('vwap')">VWAP</button>
+    <button class="indicator-btn indicator-ma200" [class.active]="indicators['ma200']" (click)="toggleIndicator('ma200')">MA 200</button>
+    <button class="indicator-btn indicator-ma20" [class.active]="indicators['ma20']" (click)="toggleIndicator('ma20')">MA 20</button>
+    <button class="indicator-btn indicator-ma7" [class.active]="indicators['ma7']" (click)="toggleIndicator('ma7')">MA 7</button>
+    <button class="indicator-btn indicator-bb" [class.active]="indicators['bollingerBands']" (click)="toggleIndicator('bollingerBands')">Bollinger</button>
+    <button class="indicator-btn indicator-volume" [class.active]="indicators['volume']" (click)="toggleIndicator('volume')">Volume</button>
+  </div>
+
   <div *ngIf="loading" class="loading">Loading market data...</div>
   <div *ngIf="error" class="error">{{ error }}</div>
 
@@ -55,7 +66,9 @@
       [data]="marketData"
       [symbol]="getSelectedSymbol()"
       [timeframe]="selectedTimeframe"
-      [supportResistanceEnabled]="supportResistanceEnabled">
+      [supportResistanceEnabled]="supportResistanceEnabled"
+      [indicators]="indicators"
+      [indicatorData]="indicatorData">
     </app-chart>
   </div>
 

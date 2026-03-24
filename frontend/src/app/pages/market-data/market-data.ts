@@ -23,6 +23,18 @@ export class MarketDataPage implements OnInit {
   error: string | null = null;
   supportResistanceEnabled: boolean = false;
 
+  // Indicator toggle state
+  indicators: { [key: string]: boolean } = {
+    rsi: false,
+    vwap: false,
+    ma200: false,
+    ma20: false,
+    ma7: false,
+    bollingerBands: false,
+    volume: false
+  };
+  indicatorData: { [key: string]: any } = {};
+
   constructor(
     private apiService: ApiService,
     private cdr: ChangeDetectorRef
@@ -92,6 +104,14 @@ export class MarketDataPage implements OnInit {
             first: data[0]?.timestamp,
             last: data[data.length - 1]?.timestamp
           } : 'No data');
+
+        // Fetch enabled indicators
+        for (const [name, enabled] of Object.entries(this.indicators)) {
+          if (enabled) {
+            this.fetchIndicator(name);
+          }
+        }
+
         this.cdr.detectChanges();
       },
       error: (err) => {
@@ -128,5 +148,37 @@ export class MarketDataPage implements OnInit {
 
   toggleSupportResistance(): void {
     this.supportResistanceEnabled = !this.supportResistanceEnabled;
+  }
+
+  toggleIndicator(name: string): void {
+    this.indicators[name] = !this.indicators[name];
+    // If toggled on and market data is already loaded, fetch immediately
+    if (this.indicators[name] && this.marketData.length > 0) {
+      this.fetchIndicator(name);
+    }
+  }
+
+  private fetchIndicator(name: string): void {
+    if (!this.selectedInstrumentId) {
+      return;
+    }
+    // Convert 'bollingerBands' to 'bollinger-bands' for API
+    const endpoint = name === 'bollingerBands' ? 'bollinger-bands' : name;
+
+    this.apiService.getIndicator(
+      endpoint,
+      this.selectedInstrumentId,
+      this.selectedTimeframe,
+      this.startDate || undefined,
+      this.endDate || undefined
+    ).subscribe({
+      next: (data) => {
+        this.indicatorData = { ...this.indicatorData, [name]: data };
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        console.error(`Failed to fetch ${name}:`, err);
+      }
+    });
   }
 }
