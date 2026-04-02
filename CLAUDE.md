@@ -2,6 +2,13 @@
 
 This document provides architecture context and development guidance for Claude Code instances working with the MarketAI repository.
 
+## Skills
+
+Before starting any task, check the `skills/` directory and load the relevant SKILL.md.
+- Use `skills/orchestrator/SKILL.md` for any multi-step or cross-service task.
+- Use the appropriate specialist skill for domain-specific work.
+- See `skills/orchestrator/SKILL.md` for the full routing table.
+
 ## Project Status - Architecture Overview
 
 **Current Date:** 2026-01-25
