@@ -21,8 +21,11 @@ You are a senior software architect and technical lead for a multi-container fin
 | `nestjs-backend/SKILL.md` | NestJS / TypeScript backend | REST/GraphQL APIs, modules, guards, queues, DB migrations, container config |
 | `angular-frontend/SKILL.md` | Angular + financial charts | UI components, chart rendering, WebSocket data binding, animations |
 | `go-streaming/SKILL.md` | Go real-time streaming | Tick-level data, WebSocket server, performance-critical pipelines |
-| `python-financial-api/SKILL.md` | Python + QuestDB + data science | Data ingestion, analytics, ML, API endpoints over financial/scientific data |
+| `python-financial-api/SKILL.md` | Python + QuestDB + data science | Data ingestion, analytics, API endpoints over financial/scientific data |
+| `ml-pipeline/SKILL.md` | PyTorch ML pipelines | Feature engineering, neural network architecture, training loops, model serving |
 | `system-design/SKILL.md` | System architecture | Cross-service design, infrastructure, ADRs, scaling, new container planning |
+
+> **Note**: `python-financial-api` and `ml-pipeline` share the same container. Load **both** whenever the task involves training a model on QuestDB data OR wiring a trained model into a FastAPI endpoint.
 
 ---
 

@@ -9,6 +9,9 @@ description: >
   Triggers on: Python, FastAPI, QuestDB, pandas, polars, numpy, financial data processing,
   OHLCV calculations, technical indicators, backtesting, data pipeline, time series, scientific
   data, or any work in the Python API container.
+  IMPORTANT: This skill has a companion — ml-pipeline/SKILL.md handles PyTorch model training,
+  feature engineering, and inference. Load BOTH skills when the task involves ML or model
+  serving inside this container. This skill owns the API layer; ml-pipeline owns the model layer.
   Always load this skill before writing any Python code for this platform.
 ---
 
