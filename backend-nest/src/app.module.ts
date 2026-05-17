@@ -9,6 +9,10 @@ import { IngestModule } from './modules/ingest/ingest.module';
 import { IndicatorsModule } from './modules/indicators/indicators.module';
 import { SupportResistanceModule } from './modules/support-resistance/support-resistance.module';
 import { DataRangesModule } from './modules/data-ranges/data-ranges.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { OptionsSignalsModule } from './modules/options-signals/options-signals.module';
+import { OptionsFlowModule } from './modules/options-flow/options-flow.module';
+import { OptionsPredictionsModule } from './modules/options-predictions/options-predictions.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -24,6 +28,10 @@ import configuration from './config/configuration';
     IndicatorsModule,
     SupportResistanceModule,
     DataRangesModule,
+    AuthModule,
+    OptionsSignalsModule,
+    OptionsFlowModule,
+    OptionsPredictionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
