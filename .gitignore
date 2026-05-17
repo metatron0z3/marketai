@@ -1,6 +1,7 @@
 .env
 /venv
-pycache/ 
+pycache/
+__pycache__/ 
 *.pyc
 data/
 *.dbf.gz

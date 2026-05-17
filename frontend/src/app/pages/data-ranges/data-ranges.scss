@@ -1,0 +1,104 @@
+.container {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
+
+h1 {
+  color: #333;
+  margin: 0 0 5px 0;
+}
+
+.subtitle {
+  margin: 0 0 30px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.loading {
+  margin-top: 20px;
+  padding: 10px;
+  border-radius: 4px;
+  background-color: #e0f7fa;
+  color: #007bff;
+}
+
+.error {
+  margin-top: 20px;
+  padding: 10px;
+  border-radius: 4px;
+  background-color: #ffe0b2;
+  color: #ff5722;
+}
+
+.data-ranges {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.provider-section {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.provider-header {
+  margin: 0;
+  padding: 12px 15px;
+  background-color: #007bff;
+  color: #fff;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.datatype-section {
+  padding: 15px;
+}
+
+.datatype-header {
+  margin: 0 0 15px 0;
+  padding: 6px 12px;
+  background: #f2f2f2;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+  display: inline-block;
+}
+
+.ranges-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+
+  th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+  }
+
+  tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+
+  tbody tr:hover {
+    background-color: #f0f0f0;
+  }
+}
+
+.symbol-cell {
+  font-weight: bold;
+  color: #333;
+}
+
+.no-data {
+  color: #999;
+  font-style: italic;
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+}

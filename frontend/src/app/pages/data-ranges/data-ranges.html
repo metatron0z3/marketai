@@ -1,0 +1,39 @@
+<div class="container">
+  <h1>Data Ranges</h1>
+  <p class="subtitle">Available data in the database</p>
+
+  <div *ngIf="loading" class="loading">Loading data ranges...</div>
+
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <div *ngIf="dataRanges && !loading" class="data-ranges">
+    <section class="provider-section">
+      <h2 class="provider-header">Databento</h2>
+
+      <div *ngFor="let datatype of dataRanges.datatypes" class="datatype-section">
+        <h3 class="datatype-header">{{ datatype.datatype }}</h3>
+
+        <table class="ranges-table" *ngIf="datatype.symbols.length > 0">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Start Date</th>
+              <th>End Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let symbol of datatype.symbols">
+              <td class="symbol-cell">{{ symbol.symbol }}</td>
+              <td>{{ symbol.start_date }}</td>
+              <td>{{ symbol.end_date }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p *ngIf="datatype.symbols.length === 0" class="no-data">
+          No data available for this datatype
+        </p>
+      </div>
+    </section>
+  </div>
+</div>

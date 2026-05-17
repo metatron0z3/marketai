@@ -1,0 +1,12 @@
+<div class="chart-wrapper">
+  <canvas #overlayCanvas class="session-overlay"></canvas>
+  <div #chartContainer class="chart-container"></div>
+  <app-support-resistance-lines
+    [chart]="chart"
+    [chartContainer]="chartContainer"
+    [candlestickSeries]="candlestickSeries"
+    [symbol]="symbol"
+    [enabled]="supportResistanceEnabled"
+  ></app-support-resistance-lines>
+  <div #rsiContainer class="rsi-container" [style.display]="indicators?.['rsi'] ? 'block' : 'none'"></div>
+</div>
