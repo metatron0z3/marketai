@@ -1,0 +1,157 @@
+<div class="options-container">
+  <div class="page-header">
+    <h2>Options Flow</h2>
+    <p class="subtitle">Unusual activity signals from OPRA options data</p>
+  </div>
+
+  <div class="tab-bar">
+    <button
+      class="tab-btn"
+      [class.active]="activeTab === 'flow'"
+      (click)="setTab('flow')"
+    >
+      24h Unusual Flow
+    </button>
+    <button
+      class="tab-btn"
+      [class.active]="activeTab === 'whale'"
+      (click)="setTab('whale')"
+    >
+      Whale Positioning
+    </button>
+  </div>
+
+  <!-- 24h Unusual Flow Tab -->
+  <div *ngIf="activeTab === 'flow'" class="tab-content">
+    <div class="tab-description">
+      Detects aggressive sweep activity and elevated premium flow likely to precede a move within 24 hours.
+      Ranked by signal score (sweep intensity + aggressor ratio + RVOL).
+    </div>
+
+    <div class="controls">
+      <label>
+        Top
+        <input type="number" [(ngModel)]="flowN" min="1" max="100" class="num-input" />
+        signals
+      </label>
+      <label>
+        Lookback
+        <input type="number" [(ngModel)]="flowLookbackMinutes" min="1" max="1440" class="num-input" />
+        minutes
+      </label>
+      <button class="refresh-btn" (click)="refreshFlow()" [disabled]="flowLoading">
+        {{ flowLoading ? 'Loading…' : 'Refresh' }}
+      </button>
+    </div>
+
+    <div *ngIf="flowError" class="error-state">{{ flowError }}</div>
+
+    <div *ngIf="!flowLoading && !flowError && flowSignals.length === 0" class="empty-state">
+      No signals found in the last {{ flowLookbackMinutes }} minutes. Ingest OPRA data and run
+      <code>POST /api/v1/options/features/compute</code> to generate signals.
+    </div>
+
+    <table *ngIf="flowSignals.length > 0" class="signals-table">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Strike</th>
+          <th>Expiry</th>
+          <th>C/P</th>
+          <th>Score</th>
+          <th>RVOL</th>
+          <th>Sweep</th>
+          <th>Aggressor</th>
+          <th>IV Rank</th>
+          <th>DTE</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let s of flowSignals" [class]="getScoreClass(s.signal_score)">
+          <td class="symbol">{{ s.symbol }}</td>
+          <td>{{ s.strike }}</td>
+          <td>{{ formatExp(s.expiration) }}</td>
+          <td [class]="s.put_call === 'C' ? 'call' : 'put'">{{ s.put_call }}</td>
+          <td class="score-cell">
+            <div class="score-bar-wrap">
+              <div class="score-bar-fill" [class]="getScoreClass(s.signal_score)" [style.width.%]="s.signal_score * 100"></div>
+            </div>
+            <span class="score-label">{{ formatScore(s.signal_score) }}</span>
+          </td>
+          <td>{{ s.rvol?.toFixed(1) }}x</td>
+          <td>{{ formatPct(s.sweep_intensity) }}</td>
+          <td>{{ formatPct(s.aggressor_ratio) }}</td>
+          <td>{{ formatPct(s.iv_rank) }}</td>
+          <td>{{ s.days_to_exp }}d</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Whale Positioning Tab -->
+  <div *ngIf="activeTab === 'whale'" class="tab-content">
+    <div class="tab-description">
+      Detects institutional accumulation of medium-term options (14–60 DTE, ≥$25K per trade, BUY side only).
+      Ranked by whale signal score (premium commitment + accumulation pattern + strike concentration).
+    </div>
+
+    <div class="controls">
+      <label>
+        Top
+        <input type="number" [(ngModel)]="whaleN" min="1" max="100" class="num-input" />
+        signals
+      </label>
+      <label>
+        Lookback
+        <input type="number" [(ngModel)]="whaleLookbackDays" min="1" max="90" class="num-input" />
+        days
+      </label>
+      <button class="refresh-btn" (click)="refreshWhale()" [disabled]="whaleLoading">
+        {{ whaleLoading ? 'Loading…' : 'Refresh' }}
+      </button>
+    </div>
+
+    <div *ngIf="whaleError" class="error-state">{{ whaleError }}</div>
+
+    <div *ngIf="!whaleLoading && !whaleError && whaleSignals.length === 0" class="empty-state">
+      No whale signals found in the last {{ whaleLookbackDays }} days. Ingest OPRA data and run
+      <code>POST /api/v1/options/whale/features/compute</code> to generate signals.
+    </div>
+
+    <table *ngIf="whaleSignals.length > 0" class="signals-table">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Strike</th>
+          <th>Expiry</th>
+          <th>C/P</th>
+          <th>Score</th>
+          <th>Premium</th>
+          <th>Acc Days</th>
+          <th>Concentration</th>
+          <th>Avg DTE</th>
+          <th>Delta</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let s of whaleSignals" [class]="getScoreClass(s.whale_signal_score)">
+          <td class="symbol">{{ s.symbol }}</td>
+          <td>{{ s.strike }}</td>
+          <td>{{ formatExp(s.expiration) }}</td>
+          <td [class]="s.put_call === 'C' ? 'call' : 'put'">{{ s.put_call }}</td>
+          <td class="score-cell">
+            <div class="score-bar-wrap">
+              <div class="score-bar-fill" [class]="getScoreClass(s.whale_signal_score)" [style.width.%]="s.whale_signal_score * 100"></div>
+            </div>
+            <span class="score-label">{{ formatScore(s.whale_signal_score) }}</span>
+          </td>
+          <td>{{ formatPremium(s.cluster_premium_total) }}</td>
+          <td>{{ s.accumulation_days }}/5</td>
+          <td>{{ formatPct(s.strike_concentration) }}</td>
+          <td>{{ s.avg_dte }}d</td>
+          <td>{{ s.avg_delta?.toFixed(2) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

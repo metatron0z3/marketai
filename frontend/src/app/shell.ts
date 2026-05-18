@@ -17,6 +17,7 @@ import { RouterModule } from '@angular/router';
           <a routerLink="/animated-chart" routerLinkActive="active" class="nav-link">Live Chart</a>
           <a routerLink="/ingest" routerLinkActive="active" class="nav-link">Data Ingestion</a>
           <a routerLink="/data-ranges" routerLinkActive="active" class="nav-link">Data Ranges</a>
+          <a routerLink="/options" routerLinkActive="active" class="nav-link">Options Flow</a>
         </div>
       </nav>
       <div class="content">

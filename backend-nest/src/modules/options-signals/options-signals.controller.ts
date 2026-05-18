@@ -1,11 +1,8 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { OptionsSignalsService } from './options-signals.service';
-import { AuthGuard } from '../auth/auth.guard';
 
 @ApiTags('options-signals')
-@ApiBearerAuth()
-@UseGuards(AuthGuard)
 @Controller('api/v1/signals')
 export class OptionsSignalsController {
   constructor(private readonly service: OptionsSignalsService) {}
