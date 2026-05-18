@@ -10,7 +10,6 @@ export default () => ({
   pythonService: {
     url: process.env.PYTHON_SERVICE_URL || 'http://python-service:8000',
   },
-  pythonServiceUrl: process.env.PYTHON_SERVICE_URL || 'http://python-service:8000',
   jwt: {
     secret: process.env.JWT_SECRET || 'changeme',
   },

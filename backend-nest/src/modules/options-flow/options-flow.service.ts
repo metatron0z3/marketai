@@ -11,7 +11,7 @@ export class OptionsFlowService {
     private readonly http: HttpService,
     private readonly config: ConfigService,
   ) {
-    this.pythonUrl = this.config.get<string>('pythonServiceUrl', 'http://python-service:8000');
+    this.pythonUrl = this.config.get<string>('pythonService.url', 'http://python-service:8000');
   }
 
   async computeFeatures(symbol: string, startDate: string, endDate: string): Promise<any> {

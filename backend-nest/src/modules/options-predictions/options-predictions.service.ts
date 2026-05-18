@@ -11,7 +11,7 @@ export class OptionsPredictionsService {
     private readonly http: HttpService,
     private readonly config: ConfigService,
   ) {
-    this.pythonUrl = this.config.get<string>('pythonServiceUrl', 'http://python-service:8000');
+    this.pythonUrl = this.config.get<string>('pythonService.url', 'http://python-service:8000');
   }
 
   async predict(contract: Record<string, any>): Promise<any> {

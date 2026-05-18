@@ -2,14 +2,10 @@ import os
 import tempfile
 import threading
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from app.modules.options.services.ingest import (
-    _new_job,
-    get_job,
-    list_jobs,
-    process_opra_file,
-)
+from app.core.job_manager import create_job, get_job, list_jobs
+from app.modules.options.services.ingest import process_opra_file
 
 router = APIRouter()
 
@@ -20,13 +16,13 @@ async def upload_opra_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="File must be a .dbn.zst or .dbn Databento file")
 
     contents = await file.read()
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1])
+    suffix = ".dbn.zst" if file.filename.endswith(".dbn.zst") else ".dbn"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     tmp.write(contents)
     tmp.close()
 
-    job_id = _new_job(file.filename)
-    thread = threading.Thread(target=process_opra_file, args=(job_id, tmp.name), daemon=True)
-    thread.start()
+    job_id = create_job(file.filename)
+    threading.Thread(target=process_opra_file, args=(job_id, tmp.name), daemon=True).start()
 
     return {"job_id": job_id, "status": "pending", "message": "OPRA file queued for processing"}
 

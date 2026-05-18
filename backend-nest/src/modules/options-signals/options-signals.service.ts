@@ -11,7 +11,7 @@ export class OptionsSignalsService {
     private readonly http: HttpService,
     private readonly config: ConfigService,
   ) {
-    this.pythonUrl = this.config.get<string>('pythonServiceUrl', 'http://python-service:8000');
+    this.pythonUrl = this.config.get<string>('pythonService.url', 'http://python-service:8000');
   }
 
   async getTopSignals(n: number, lookbackMinutes: number): Promise<any> {
