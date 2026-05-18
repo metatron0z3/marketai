@@ -233,33 +233,189 @@ Causal architecture constraints:
 
 ---
 
+---
+
+## Whale Positioning Detector (2–8 Week Institutional Signal)
+
+The second major sub-feature targets a completely different behavior from the 24h flow detector: **institutional accumulation of medium-term options positions** by whales who leg in slowly over multiple days to avoid detection, committing large dollar premiums to a directional view before a major catalyst.
+
+### How It Differs from the 24h Feature
+
+| Dimension | 24h Unusual Volume | Whale Positioning |
+|---|---|---|
+| DTE filter | Any expiration | 14–60 days only |
+| Aggressor filter | All sides | BUY side only |
+| Time bucket | 5-minute | Daily |
+| Signal type | Urgency: sweeps, immediate aggression | Accumulation: size + concentration over days |
+| Premium threshold | None | ≥ $25,000 per trade |
+| Label horizon | 24 hours | 28 calendar days |
+| Move threshold | 2% | 5% |
+| Model artifacts | `options_model.pt` | `whale_model.pkl` |
+| API prefix | `/api/v1/options/*` | `/api/v1/options/whale/*` |
+
+### Why Whales Accumulate This Way
+
+Institutional traders with a 2-8 week directional thesis face a liquidity problem: a single large options order in a medium-liquidity contract will move the market against them. So they leg in — small lots, across multiple sessions, sometimes on multiple strikes in the same expiration — building a position before the thesis plays out.
+
+The behavioral fingerprint of this activity:
+- **Consistent buying across days** (`accumulation_days`): not a one-time event but a pattern
+- **Strike concentration** (`strike_concentration`): converging on a specific strike, not scatter-gun hedging
+- **Meaningful dollar commitment per trade** (`cluster_premium_total`): the $25k floor filters noise; real whales commit real money
+- **Medium-duration DTE**: not 0-DTE gambling, not LEAPS hedging — 2-8 weeks is where directional conviction lives
+
+### Whale Feature Set
+
+| Feature | Description |
+|---|---|
+| `cluster_premium_total` | Total premium committed that day for this (symbol, strike, expiration, put_call) |
+| `cluster_size_max` | Largest single order in the cluster |
+| `cluster_trade_count` | Distinct buy trades in the daily window |
+| `strike_concentration` | `1 - std(strikes) / mean(strikes)` per (symbol, day); 1.0 = all flow on one strike |
+| `avg_dte` | Average days to expiration across cluster trades |
+| `otm_pct` | Average out-of-the-money percentage (computed from underlying price when available) |
+| `avg_delta` | Average delta of cluster; 0.3-0.5 = directional bet, not hedge |
+| `premium_per_trade` | `cluster_premium_total / cluster_trade_count`; large = conviction per order |
+| `vol_oi_ratio` | Cluster size / open interest; >1 = new position opening |
+| `iv_rank` | IV percentile vs available history; buying into high-IV = strong conviction |
+| `accumulation_days` | Distinct qualifying buy days in past 5 calendar days per contract |
+| `call_put_ratio` | Call premium / total premium per (symbol, day) |
+
+### Whale Data Flow
+
+```
+options_trades (existing table)
+        │
+        ▼  Filter: aggressor=BUY, DTE 14-60, premium >= $25k
+        │
+services/whale_features.py
+  - copy filtered trades → whale_trades
+  - aggregate by (symbol, strike, expiration, put_call, day)
+  - compute cluster features (premium, concentration, accumulation)
+  - write → whale_features (QuestDB)
+        │
+        ▼
+services/whale_labels.py
+  - look up equity price from trades_data at ts_event and +28 days
+  - label_4w = 1 if abs(future - now) / now > 0.05
+  - batch queries + merge_asof (no N+1, no leakage)
+        │
+        ▼
+ml/training/train_whale_lgbm.py
+  - load labeled whale_features
+  - walk-forward cross-validation
+  - fit SequenceNormalizer on train split only
+  - save whale_model.pkl + whale_model_normalizer.pkl
+        │
+        ▼
+services/whale_inference.py
+  - @lru_cache model + normalizer loaders
+  - rule-based fallback: cluster_premium * 0.5 + accumulation_days * 0.3 + concentration * 0.2
+  - whale_top_signals(n, lookback_days) — queries by day, not minute
+        │
+        ▼
+api/whale.py (mounted at /whale prefix in router.py)
+  POST /api/v1/options/whale/features/compute
+  POST /api/v1/options/whale/labels/generate
+  POST /api/v1/options/whale/predict
+  GET  /api/v1/options/whale/signals
+```
+
+### Whale Database Schema
+
+**`whale_trades`** — filtered raw trades qualifying as potential whale activity:
+
+| Column | Type | Description |
+|---|---|---|
+| `ts_event` | TIMESTAMP | Trade timestamp |
+| `symbol` | SYMBOL | Underlying ticker |
+| `strike`, `expiration`, `put_call` | — | Contract identity |
+| `price`, `size`, `premium` | DOUBLE/LONG | Execution details |
+| `delta`, `iv`, `open_interest` | DOUBLE | Greeks and OI at execution |
+| `days_to_exp` | INT | DTE at trade time (14-60) |
+| `otm_pct` | DOUBLE | (strike - underlying) / underlying |
+
+**`whale_features`** — daily cluster signals per contract:
+
+| Column | Type | Description |
+|---|---|---|
+| `ts_event` | TIMESTAMP | Trading day (09:30 AM) |
+| `cluster_premium_total` | DOUBLE | Total $ committed that day |
+| `cluster_size_max` | LONG | Largest single order |
+| `cluster_trade_count` | INT | Distinct buy trades |
+| `strike_concentration` | DOUBLE | Focus score [0, 1] |
+| `accumulation_days` | INT | Days of buying in past 5 |
+| `label_4w` | INT | 1 = >5% move in 28d, NULL = unlabeled |
+
+### Whale API Endpoints
+
+```
+POST /api/v1/options/whale/features/compute?symbol=SPY&start_date=...&end_date=...
+POST /api/v1/options/whale/labels/generate?symbol=SPY&start_date=...&end_date=...
+POST /api/v1/options/whale/predict
+  Body: WhaleSnapshot (symbol, strike, expiration, put_call, cluster_premium_total, ...)
+  Returns: { whale_signal_score, model_loaded, scored_at, ...snapshot fields }
+
+GET /api/v1/options/whale/signals?n=20&lookback_days=5
+  Returns: { signals: [...ranked by whale_signal_score desc], count }
+```
+
+Note: `lookback_days` not `lookback_minutes` — whale signals are day-granularity.
+
+### Training the Whale Model
+
+```bash
+# 1. Compute whale features (after ingesting OPRA data)
+curl -X POST "http://localhost:8000/api/v1/options/whale/features/compute?symbol=SPY&start_date=2026-01-01&end_date=2026-05-17"
+
+# 2. Generate 4-week labels (needs 28 days of future equity data)
+curl -X POST "http://localhost:8000/api/v1/options/whale/labels/generate?symbol=SPY&start_date=2026-01-01&end_date=2026-04-20"
+
+# 3. Train LightGBM
+docker exec market_python_service python -m app.modules.options.ml.training.train_whale_lgbm --symbol SPY
+
+# 4. Test whale signals
+curl "http://localhost:8000/api/v1/options/whale/signals?n=10&lookback_days=5"
+```
+
+---
+
 ## Module Structure
 
 ```
 modules/options/
 ├── router.py                   # Mounts all sub-routers at /api/v1/options
 ├── db/
-│   └── schema.py               # DDL for options_trades + options_features
+│   └── schema.py               # DDL for all 4 tables (options_trades, options_features,
+│                               #   whale_trades, whale_features)
 ├── api/
 │   ├── ingest.py               # POST /ingest/upload, GET /ingest/jobs
 │   ├── features.py             # POST /features/compute
 │   ├── labels.py               # POST /labels/generate
-│   └── predictions.py          # POST /predict, GET /signals
+│   ├── predictions.py          # POST /predict, GET /signals
+│   └── whale.py                # POST /whale/features/compute, /whale/labels/generate
+│                               #   POST /whale/predict, GET /whale/signals
 ├── services/
 │   ├── greeks.py               # Black-Scholes via py_vollib
 │   ├── ingest.py               # Parse, enrich, sweep-detect, bulk insert
-│   ├── features.py             # 5-minute feature aggregation
+│   ├── features.py             # 5-minute feature aggregation → options_features
 │   ├── labels.py               # 24h future return labeling
-│   └── inference.py            # Model loader (@lru_cache) + signal ranking
+│   ├── inference.py            # 24h model loader + signal ranking
+│   ├── whale_features.py       # Daily whale cluster aggregation → whale_features
+│   ├── whale_labels.py         # 28-day / 5% move labeling
+│   └── whale_inference.py      # Whale model loader + signal ranking
 └── ml/
-    ├── features/feature_builder.py     # Pulls labeled rows from QuestDB
+    ├── features/
+    │   ├── feature_builder.py          # Loads labeled options_features rows
+    │   └── whale_feature_builder.py    # Loads labeled whale_features rows
     ├── datasets/options_dataset.py     # PyTorch Dataset + SequenceDataset
     ├── models/
     │   ├── base_model.py               # BaseFinancialModel(nn.Module)
-    │   └── lgbm_model.py               # LightGBM wrapper
+    │   ├── lgbm_model.py               # LightGBM wrapper (24h)
+    │   └── whale_model.py              # LGBMWhaleModel + WHALE_FEATURE_COLS
     ├── training/
-    │   ├── train_lgbm.py               # Phase 1 run script
-    │   └── train_sequence.py           # Phase 2 LSTM run script
+    │   ├── train_lgbm.py               # 24h Phase 1 training
+    │   ├── train_sequence.py           # 24h Phase 2 LSTM training
+    │   └── train_whale_lgbm.py         # Whale Phase 1 training
     ├── evaluation/metrics.py           # Sharpe, accuracy, walk-forward splits
     └── registry/model_registry.py     # TorchScript save/load, SequenceNormalizer
 ```
