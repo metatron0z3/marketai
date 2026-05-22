@@ -11,6 +11,25 @@ services:
     networks:
       - market_network
 
+  redis:
+    image: redis:7-alpine
+    container_name: market_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - market_network
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: market_mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri /mlflow
+    networks:
+      - market_network
+
   # NestJS Backend - API Gateway
   nestjs-backend:
     build:
@@ -22,6 +41,7 @@ services:
     depends_on:
       - questdb
       - python-service
+      - redis
     networks:
       - market_network
     environment:
@@ -33,6 +53,8 @@ services:
       - QUESTDB_PASSWORD=quest
       - QUESTDB_DATABASE=qdb
       - PYTHON_SERVICE_URL=http://python-service:8000
+      - JWT_SECRET=${JWT_SECRET:-changeme}
+      - REDIS_URL=redis://redis:6379
 
   # Python Service - Data Ingestion & ML
   python-service:
@@ -44,13 +66,18 @@ services:
       - "8000:8000"
     volumes:
       - ./python-service/app:/app/app # Mount local app directory for development
+      - model-artifacts:/app/artifacts
     depends_on:
       - questdb
+      - mlflow
     networks:
       - market_network
     environment:
       - QUESTDB_HOST=questdb
       - QUESTDB_PORT=9000
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MODEL_ARTIFACTS_PATH=/app/artifacts
+      - RISK_FREE_RATE=0.05
 
   frontend:
     build:
@@ -80,6 +107,8 @@ services:
 
 volumes:
   questdb-data:
+  mlflow-data:
+  model-artifacts:
 
 networks:
   market_network:

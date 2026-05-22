@@ -2,8 +2,21 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.db import get_db_connection
 from .api.v1.api import api_router
+from .modules.options.db.schema import create_options_tables, create_whale_tables
 
 app = FastAPI()
+
+
+@app.on_event("startup")
+def on_startup():
+    try:
+        create_options_tables()
+    except Exception as exc:
+        print(f"Warning: could not create options tables: {exc}")
+    try:
+        create_whale_tables()
+    except Exception as exc:
+        print(f"Warning: could not create whale tables: {exc}")
 
 # CORS Middleware
 origins = [

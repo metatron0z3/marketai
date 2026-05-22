@@ -63,6 +63,20 @@ export class ApiService {
     return this.http.get<any>(`${this.apiUrl}/data-ranges`);
   }
 
+  getOptionsSignals(n: number = 20, lookbackMinutes: number = 30): Observable<any> {
+    const params = new HttpParams()
+      .set('n', n.toString())
+      .set('lookback_minutes', lookbackMinutes.toString());
+    return this.http.get<any>(`${this.apiUrl}/signals`, { params });
+  }
+
+  getWhaleSignals(n: number = 20, lookbackDays: number = 5): Observable<any> {
+    const params = new HttpParams()
+      .set('n', n.toString())
+      .set('lookback_days', lookbackDays.toString());
+    return this.http.get<any>(`${this.apiUrl}/whale/signals`, { params });
+  }
+
   getIndicator(name: string, instrumentId: number, timeframe: string, startDate?: string, endDate?: string): Observable<any> {
     let params = new HttpParams()
       .set('instrument_id', instrumentId.toString())

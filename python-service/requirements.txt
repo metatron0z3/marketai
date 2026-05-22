@@ -7,3 +7,8 @@ sqlalchemy
 databento
 requests
 python-multipart
+lightgbm
+scikit-learn
+mlflow
+py_vollib
+torch
