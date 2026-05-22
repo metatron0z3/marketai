@@ -7,7 +7,12 @@ from app.core.db import get_db_connection
 MOVE_THRESHOLD = 0.02
 
 
-def generate_labels(symbol: str, start_date: str, end_date: str) -> int:
+def generate_labels(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    data_source: str = "databento",
+) -> int:
     """
     Label options_features rows with future equity move direction.
     label_24h = 1 if underlying moves >2% within 24h, else 0.
@@ -18,13 +23,10 @@ def generate_labels(symbol: str, start_date: str, end_date: str) -> int:
     3. Align prices to feature timestamps via merge_asof in pandas.
     4. Batch-update labels with executemany.
 
-    Never uses future IV, OI, or options prices — only trades_data equity prices.
+    Never uses future IV, OI, or options prices — only equity prices.
 
-    TODO (Massive path): This function reads equity prices from trades_data (Databento
-    schema, keyed by instrument_id). For datasets ingested via POST /ingest/massive, it
-    must instead read close prices from underlying_bars (keyed by symbol + ts_event).
-    The merge_asof join pattern can be reused; only the source table and column names
-    change.
+    data_source: "databento" reads from trades_data (default, Databento/OPRA path).
+                 "massive"   reads close prices from underlying_bars (Massive path).
     """
     conn = get_db_connection()
     cur = conn.cursor()
@@ -50,18 +52,32 @@ def generate_labels(symbol: str, start_date: str, end_date: str) -> int:
     feature_df = pd.DataFrame(feature_rows, columns=["ts_event", "symbol"])
     feature_df["ts_event"] = pd.to_datetime(feature_df["ts_event"], utc=True)
 
-    # Fetch all equity prices for the window + 25h buffer in one query
     window_end = feature_df["ts_event"].max() + timedelta(hours=25)
-    cur.execute(
-        """
-        SELECT ts_event, price
-        FROM trades_data
-        WHERE ts_event >= %s
-          AND ts_event <= %s
-        ORDER BY ts_event
-        """,
-        (start_date, window_end.isoformat()),
-    )
+
+    if data_source == "massive":
+        cur.execute(
+            """
+            SELECT ts_event, close AS price
+            FROM underlying_bars
+            WHERE symbol = %s
+              AND ts_event >= %s
+              AND ts_event <= %s
+            ORDER BY ts_event
+            """,
+            (symbol, start_date, window_end.isoformat()),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT ts_event, price
+            FROM trades_data
+            WHERE ts_event >= %s
+              AND ts_event <= %s
+            ORDER BY ts_event
+            """,
+            (start_date, window_end.isoformat()),
+        )
+
     price_rows = cur.fetchall()
     cur.close()
 
@@ -73,7 +89,6 @@ def generate_labels(symbol: str, start_date: str, end_date: str) -> int:
     equity_df["ts_event"] = pd.to_datetime(equity_df["ts_event"], utc=True)
     equity_df = equity_df.sort_values("ts_event").reset_index(drop=True)
 
-    # Current price: last equity trade at or before each feature timestamp
     current = pd.merge_asof(
         feature_df.sort_values("ts_event"),
         equity_df.rename(columns={"price": "price_now"}),
@@ -81,7 +96,6 @@ def generate_labels(symbol: str, start_date: str, end_date: str) -> int:
         direction="backward",
     )
 
-    # Future price: first equity trade on or after ts_event + 24h
     feature_df["ts_future"] = feature_df["ts_event"] + timedelta(hours=24)
     future_lookup = feature_df[["ts_event", "ts_future"]].copy()
     future_lookup = future_lookup.rename(columns={"ts_future": "ts_event_future"})

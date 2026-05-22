@@ -8,20 +8,26 @@ MOVE_THRESHOLD = 0.05
 HORIZON_DAYS = 28
 
 
-def generate_whale_labels(symbol: str, start_date: str, end_date: str) -> int:
+def generate_whale_labels(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    data_source: str = "databento",
+) -> int:
     """
     Label whale_features rows with a 4-week directional move flag.
     label_4w = 1 if the underlying moves >5% within 28 calendar days, else 0.
 
     Uses two batch queries + merge_asof to avoid N+1 queries.
-    Only uses future equity prices from trades_data — never future IV, OI, or options data.
+    Only uses future equity prices — never future IV, OI, or options data.
 
-    TODO (Massive path): Equity prices are currently read from trades_data (Databento
-    schema). For datasets ingested via POST /ingest/massive, replace the trades_data
-    query with a query against underlying_bars (keyed by symbol + ts_event, using close
-    as the price). The run_massive_ingest worker already extends the underlying_bars
-    window by 30 days past end_date so future prices are available for the full 28-day
-    label horizon without a separate ingest call.
+    Args:
+        data_source: "databento" reads close prices from trades_data (default).
+                     "massive"   reads close prices from underlying_bars.
+                     When using the Massive path, run_massive_ingest already extends
+                     the underlying_bars window 30 days past end_date, so future
+                     prices for the full 28-day horizon are available without a
+                     separate ingest call.
     """
     conn = get_db_connection()
     cur = conn.cursor()
@@ -48,16 +54,31 @@ def generate_whale_labels(symbol: str, start_date: str, end_date: str) -> int:
     feature_df["ts_event"] = pd.to_datetime(feature_df["ts_event"], utc=True)
 
     window_end = feature_df["ts_event"].max() + timedelta(days=HORIZON_DAYS + 1)
-    cur.execute(
-        """
-        SELECT ts_event, price
-        FROM trades_data
-        WHERE ts_event >= %s
-          AND ts_event <= %s
-        ORDER BY ts_event
-        """,
-        (start_date, window_end.isoformat()),
-    )
+
+    if data_source == "massive":
+        cur.execute(
+            """
+            SELECT ts_event, close AS price
+            FROM underlying_bars
+            WHERE symbol = %s
+              AND ts_event >= %s
+              AND ts_event <= %s
+            ORDER BY ts_event
+            """,
+            (symbol, start_date, window_end.isoformat()),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT ts_event, price
+            FROM trades_data
+            WHERE ts_event >= %s
+              AND ts_event <= %s
+            ORDER BY ts_event
+            """,
+            (start_date, window_end.isoformat()),
+        )
+
     price_rows = cur.fetchall()
     cur.close()
 
