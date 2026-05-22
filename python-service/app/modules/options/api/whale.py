@@ -32,10 +32,15 @@ def compute_features(
     symbol: str = Query(...),
     start_date: str = Query(...),
     end_date: str = Query(...),
+    data_source: str = Query(
+        default="databento",
+        description="Options data source: 'databento' (options_trades) or 'massive' (options_bars)",
+        pattern="^(databento|massive)$",
+    ),
 ):
     try:
-        count = compute_whale_features(symbol, start_date, end_date)
-        return {"status": "ok", "rows_written": count}
+        count = compute_whale_features(symbol, start_date, end_date, data_source=data_source)
+        return {"status": "ok", "rows_written": count, "data_source": data_source}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
