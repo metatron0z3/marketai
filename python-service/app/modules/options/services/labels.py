@@ -19,6 +19,12 @@ def generate_labels(symbol: str, start_date: str, end_date: str) -> int:
     4. Batch-update labels with executemany.
 
     Never uses future IV, OI, or options prices — only trades_data equity prices.
+
+    TODO (Massive path): This function reads equity prices from trades_data (Databento
+    schema, keyed by instrument_id). For datasets ingested via POST /ingest/massive, it
+    must instead read close prices from underlying_bars (keyed by symbol + ts_event).
+    The merge_asof join pattern can be reused; only the source table and column names
+    change.
     """
     conn = get_db_connection()
     cur = conn.cursor()

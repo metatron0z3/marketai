@@ -6,7 +6,18 @@ from app.core.db import get_db_connection
 
 
 def compute_features(symbol: str, start_date: str, end_date: str) -> int:
-    """Compute per-contract features from options_trades and write to options_features."""
+    """
+    Compute per-contract features from options_trades and write to options_features.
+
+    TODO (Massive path): This function reads from options_trades which requires raw tick
+    data (bid, ask, exchange, open_interest, iv, aggressor_side, is_sweep) that Massive
+    free-plan aggregate bars do not provide. Before this pipeline can run on Massive-
+    ingested data, compute_features must be rewritten to read from options_bars and derive
+    bar-volume equivalents: RVOL from volume/rolling_avg_volume, premium_flow from
+    close*volume*100, momentum from OHLC. Fields aggressor_ratio, sweep_intensity,
+    vol_oi_ratio, and iv_rank cannot be computed from Massive free aggregates and must be
+    dropped or replaced with bar-derived proxies.
+    """
     conn = get_db_connection()
     cur = conn.cursor()
 

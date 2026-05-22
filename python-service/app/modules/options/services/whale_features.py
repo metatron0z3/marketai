@@ -16,6 +16,14 @@ def compute_whale_features(symbol: str, start_date: str, end_date: str) -> int:
 
     Results are written to whale_trades (raw filtered trades) and
     whale_features (daily aggregated cluster signals).
+
+    TODO (Massive path): This function reads from options_trades and filters on
+    aggressor_side='BUY', which requires raw tick-level data not available on the Massive
+    free plan. For the Massive path it must be rewritten to read from options_bars using
+    daily OHLCV aggregates as a proxy: filter by premium = close*volume*100 >= 25000 and
+    DTE range, then compute cluster features without aggressor_side or is_sweep.
+    The otm_pct enrichment (currently from trades_data) must be sourced from
+    underlying_bars instead.
     """
     conn = get_db_connection()
     cur = conn.cursor()

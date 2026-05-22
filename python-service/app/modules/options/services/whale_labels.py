@@ -15,6 +15,13 @@ def generate_whale_labels(symbol: str, start_date: str, end_date: str) -> int:
 
     Uses two batch queries + merge_asof to avoid N+1 queries.
     Only uses future equity prices from trades_data — never future IV, OI, or options data.
+
+    TODO (Massive path): Equity prices are currently read from trades_data (Databento
+    schema). For datasets ingested via POST /ingest/massive, replace the trades_data
+    query with a query against underlying_bars (keyed by symbol + ts_event, using close
+    as the price). The run_massive_ingest worker already extends the underlying_bars
+    window by 30 days past end_date so future prices are available for the full 28-day
+    label horizon without a separate ingest call.
     """
     conn = get_db_connection()
     cur = conn.cursor()
