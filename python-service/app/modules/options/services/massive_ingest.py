@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -6,6 +7,11 @@ import requests
 from app.core.db import get_db_connection
 
 MASSIVE_BASE_URL = os.getenv("MASSIVE_BASE_URL", "https://api.massive.com")
+
+# Seconds to wait between paginated requests (free-plan rate limit)
+_PAGE_DELAY = float(os.getenv("MASSIVE_PAGE_DELAY", "1.0"))
+# Max retries on 429 before giving up
+_MAX_RETRIES = 5
 
 
 def _get_api_key() -> str:
@@ -15,25 +21,31 @@ def _get_api_key() -> str:
     return key
 
 
+def _do_get(url: str, api_key: str, params: dict | None = None) -> dict:
+    """GET with automatic retry on 429, honouring Retry-After when present."""
+    for attempt in range(_MAX_RETRIES):
+        resp = requests.get(
+            url,
+            params=params,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=30,
+        )
+        if resp.status_code == 429:
+            retry_after = float(resp.headers.get("Retry-After", 60))
+            print(f"    [rate-limit] 429 — waiting {retry_after:.0f}s (attempt {attempt + 1}/{_MAX_RETRIES})", flush=True)
+            time.sleep(retry_after)
+            continue
+        resp.raise_for_status()
+        return resp.json()
+    raise RuntimeError(f"Exceeded {_MAX_RETRIES} retries on 429 for {url}")
+
+
 def _massive_get(path: str, params: dict, api_key: str) -> dict:
-    resp = requests.get(
-        f"{MASSIVE_BASE_URL}{path}",
-        params=params,
-        headers={"Authorization": f"Bearer {api_key}"},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json()
+    return _do_get(f"{MASSIVE_BASE_URL}{path}", api_key, params=params)
 
 
 def _massive_get_url(url: str, api_key: str) -> dict:
-    resp = requests.get(
-        url,
-        headers={"Authorization": f"Bearer {api_key}"},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json()
+    return _do_get(url, api_key)
 
 
 def fetch_contracts(
@@ -54,6 +66,7 @@ def fetch_contracts(
     contracts.extend(data.get("results") or [])
 
     while data.get("next_url"):
+        time.sleep(_PAGE_DELAY)
         data = _massive_get_url(data["next_url"], api_key)
         contracts.extend(data.get("results") or [])
 
@@ -76,6 +89,7 @@ def fetch_agg_bars(
     bars.extend(data.get("results") or [])
 
     while data.get("next_url"):
+        time.sleep(_PAGE_DELAY)
         data = _massive_get_url(data["next_url"], api_key)
         bars.extend(data.get("results") or [])
 
