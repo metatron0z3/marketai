@@ -310,7 +310,7 @@ def run_massive_ingest(
     bar_timespan: str,
     bar_multiplier: int,
     include_expired: bool,
-    max_contracts: int,
+    max_contracts: int | None,
     ingest_run_id: str,
     contract_type: str | None = None,
 ) -> None:
@@ -367,7 +367,8 @@ def run_massive_ingest(
             contract_type=contract_type,
             expiration_date_gte=start_date,
         )
-        contracts = contracts[:max_contracts]
+        if max_contracts is not None:
+            contracts = contracts[:max_contracts]
         run["contracts_discovered"] = len(contracts)
         write_contracts(conn, contracts, ts_started)
 

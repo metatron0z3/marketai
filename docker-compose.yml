@@ -105,10 +105,41 @@ services:
     networks:
       - market_network
 
+  # ── Prefect orchestration ──────────────────────────────────────────────────
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    command: prefect server start --host 0.0.0.0 --port 4200
+    ports:
+      - "4200:4200"
+    volumes:
+      - prefect-data:/root/.prefect
+    networks:
+      - market_network
+
+  prefect-worker:
+    build:
+      context: ./python-service
+      dockerfile: Dockerfile
+    command: >
+      sh -c "sleep 10 &&
+             prefect work-pool create marketai-pool --type process --overwrite &&
+             prefect worker start --pool marketai-pool"
+    environment:
+      - PREFECT_API_URL=${PREFECT_API_URL:-http://prefect-server:4200/api}
+      - PREFECT_API_KEY=${PREFECT_API_KEY:-}
+      - QUESTDB_HOST=questdb
+      - MASSIVE_API_KEY=${MASSIVE_API_KEY:-}
+    depends_on:
+      - questdb
+      - prefect-server
+    networks:
+      - market_network
+
 volumes:
   questdb-data:
   mlflow-data:
   model-artifacts:
+  prefect-data:
 
 networks:
   market_network:
