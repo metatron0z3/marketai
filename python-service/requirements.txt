@@ -12,3 +12,4 @@ scikit-learn
 mlflow
 py_vollib
 torch
+yfinance>=0.2.40
