@@ -44,17 +44,23 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Daily bars for SPY, Jan-Mar 2025, up to 200 contracts
-  python cli/ingest_massive.py --symbol SPY --start 2025-01-01 --end 2025-03-31
+  # All calls expiring within Jan-Mar 2025 window
+  python cli/ingest_massive.py --symbol TSLA --start 2025-01-01 --end 2025-03-31 --contract-type call
 
-  # Hourly bars, active contracts only, no DB write (dry-run)
-  python cli/ingest_massive.py --symbol AAPL --start 2025-06-01 --end 2025-06-30 \\
-      --timespan hour --no-expired --dry-run
+  # All puts for the same window, leave running overnight
+  nohup python cli/ingest_massive.py --symbol TSLA --start 2025-01-01 --end 2025-03-31 \\
+      --contract-type put > ~/tsla-puts.log 2>&1 &
         """,
     )
-    p.add_argument("--symbol", required=True, help="Underlying ticker (e.g. SPY, QQQ)")
+    p.add_argument("--symbol", required=True, help="Underlying ticker (e.g. TSLA, SPY)")
     p.add_argument("--start", required=True, metavar="YYYY-MM-DD", help="Bar start date (inclusive)")
     p.add_argument("--end", required=True, metavar="YYYY-MM-DD", help="Bar end date (inclusive)")
+    p.add_argument(
+        "--contract-type",
+        choices=["call", "put"],
+        default=None,
+        help="Fetch only calls or only puts (default: both)",
+    )
     p.add_argument(
         "--timespan",
         default="day",
@@ -65,9 +71,9 @@ Examples:
     p.add_argument(
         "--max-contracts",
         type=int,
-        default=100,
+        default=None,
         metavar="N",
-        help="Max contracts to ingest (default: 100)",
+        help="Cap on contracts to ingest (default: no cap — fetch all)",
     )
     p.add_argument(
         "--no-expired",
@@ -101,13 +107,15 @@ def main() -> None:
     bar_multiplier = args.multiplier
     bar_timespan = args.timespan
     include_expired = not args.no_expired
-    max_contracts = args.max_contracts
+    max_contracts = args.max_contracts  # None = no cap
+    contract_type = args.contract_type
     dry_run = args.dry_run
     ingest_run_id = str(uuid.uuid4())
 
     _log(f"Massive ingest: {symbol}  {start_date} → {end_date}  "
          f"resolution={bar_multiplier}/{bar_timespan}  "
-         f"max_contracts={max_contracts}  "
+         f"contract_type={contract_type or 'all'}  "
+         f"max_contracts={max_contracts or 'none'}  "
          f"include_expired={include_expired}  "
          f"dry_run={dry_run}")
     _log(f"ingest_run_id: {ingest_run_id}")
@@ -138,9 +146,15 @@ def main() -> None:
 
     try:
         # Step 1: Contracts
-        _log(f"Fetching contracts for {symbol} as_of={end_date} ...")
-        contracts = fetch_contracts(symbol, end_date, include_expired, api_key)
-        contracts = contracts[:max_contracts]
+        _log(f"Fetching contracts for {symbol} as_of={end_date} "
+             f"expiration>={start_date} contract_type={contract_type or 'all'} ...")
+        contracts = fetch_contracts(
+            symbol, end_date, include_expired, api_key,
+            contract_type=contract_type,
+            expiration_date_gte=start_date,
+        )
+        if max_contracts is not None:
+            contracts = contracts[:max_contracts]
         _log(f"  {len(contracts)} contracts discovered")
         run["contracts_discovered"] = len(contracts)
 

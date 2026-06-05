@@ -6,3 +6,4 @@ __pycache__/
 data/
 *.dbf.gz
 .DS_Store
+.work/

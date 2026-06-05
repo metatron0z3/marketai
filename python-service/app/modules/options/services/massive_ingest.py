@@ -8,8 +8,8 @@ from app.core.db import get_db_connection
 
 MASSIVE_BASE_URL = os.getenv("MASSIVE_BASE_URL", "https://api.massive.com")
 
-# Seconds to wait between paginated requests (free-plan rate limit)
-_PAGE_DELAY = float(os.getenv("MASSIVE_PAGE_DELAY", "1.0"))
+# Seconds to wait between paginated requests (free-plan: ~5 req/min)
+_PAGE_DELAY = float(os.getenv("MASSIVE_PAGE_DELAY", "12.0"))
 # Max retries on 429 before giving up
 _MAX_RETRIES = 5
 
@@ -48,19 +48,39 @@ def _massive_get_url(url: str, api_key: str) -> dict:
     return _do_get(url, api_key)
 
 
+def _ts(dt: datetime | None) -> datetime | None:
+    """Strip tzinfo for QuestDB — it stores all timestamps as UTC but rejects ::timestamptz casts."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def fetch_contracts(
     underlying_symbol: str,
     as_of_date: str,
     include_expired: bool,
     api_key: str,
+    contract_type: str | None = None,
+    expiration_date_gte: str | None = None,
 ) -> list[dict]:
-    """Fetch all contracts for an underlying via /v3/reference/options/contracts, following pagination."""
+    """Fetch all contracts for an underlying via /v3/reference/options/contracts, following pagination.
+
+    contract_type: 'call' or 'put' — omit for both.
+    expiration_date_gte: exclude contracts that expired before this date (YYYY-MM-DD).
+                         Set to start_date to only get contracts active during your window.
+    """
     params = {
         "underlying_ticker": underlying_symbol,
         "as_of": as_of_date,
         "expired": str(include_expired).lower(),
         "limit": 250,
     }
+    if contract_type:
+        params["contract_type"] = contract_type.lower()
+    if expiration_date_gte:
+        params["expiration_date.gte"] = expiration_date_gte
     contracts: list[dict] = []
     data = _massive_get("/v3/reference/options/contracts", params, api_key)
     contracts.extend(data.get("results") or [])
@@ -153,7 +173,7 @@ def write_contracts(conn, contracts: list[dict], fetched_at: datetime) -> None:
             c.get("primary_exchange"),
             bool(c.get("active", True)),
             c.get("as_of"),
-            fetched_at,
+            _ts(fetched_at),
             "massive",
         )
         for c in contracts
@@ -192,7 +212,7 @@ def write_option_bars(
         t_ms = int(b.get("t") or 0)
         if t_ms in existing_ts_ms:
             continue
-        ts = datetime.fromtimestamp(t_ms / 1000, tz=timezone.utc)
+        ts = _ts(datetime.fromtimestamp(t_ms / 1000, tz=timezone.utc))
         rows.append((
             ts, ticker, underlying_symbol, expiration_date, strike_price,
             contract_type, bar_multiplier, bar_timespan,
@@ -238,7 +258,7 @@ def write_underlying_bars(
         t_ms = int(b.get("t") or 0)
         if t_ms in existing_ts_ms:
             continue
-        ts = datetime.fromtimestamp(t_ms / 1000, tz=timezone.utc)
+        ts = _ts(datetime.fromtimestamp(t_ms / 1000, tz=timezone.utc))
         rows.append((
             ts, symbol, bar_multiplier, bar_timespan,
             float(b.get("o") or 0),
@@ -271,12 +291,12 @@ def _write_ingest_run(conn, run: dict) -> None:
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
-            run["ts_started"], run["ingest_run_id"], run["source"],
+            _ts(run["ts_started"]), run["ingest_run_id"], run["source"],
             run["underlying_symbol"], run["start_date"], run["end_date"],
             run["requested_resolution"],
             run.get("contracts_discovered", 0), run.get("contracts_ingested", 0),
             run.get("bars_written", 0), run.get("underlying_bars_written", 0),
-            run["status"], run.get("error"), run.get("ts_finished"),
+            run["status"], run.get("error"), _ts(run.get("ts_finished")),
         ),
     )
     conn.commit()
@@ -292,6 +312,7 @@ def run_massive_ingest(
     include_expired: bool,
     max_contracts: int,
     ingest_run_id: str,
+    contract_type: str | None = None,
 ) -> None:
     """
     Background worker: discover contracts via Massive reference API, fetch OHLCV
@@ -341,7 +362,11 @@ def run_massive_ingest(
 
     try:
         # Step 1: Discover and store contract metadata
-        contracts = fetch_contracts(underlying_symbol, end_date, include_expired, api_key)
+        contracts = fetch_contracts(
+            underlying_symbol, end_date, include_expired, api_key,
+            contract_type=contract_type,
+            expiration_date_gte=start_date,
+        )
         contracts = contracts[:max_contracts]
         run["contracts_discovered"] = len(contracts)
         write_contracts(conn, contracts, ts_started)
