@@ -1,9 +1,21 @@
 .env
 /venv
 pycache/
-__pycache__/ 
+__pycache__/
 *.pyc
 data/
 *.dbf.gz
 .DS_Store
 .work/
+
+# Log files
+*.log
+nohup.out
+
+# One-off operational scripts (contain secrets / hardcoded paths)
+run_ingest.sh
+run_all_ingests.sh
+run_remaining_ingests.sh
+
+# Review artifacts
+*.html
