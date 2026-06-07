@@ -12,6 +12,8 @@ scikit-learn
 mlflow
 py_vollib
 torch
+anthropic>=0.40.0
+questdb
 yfinance>=0.2.40
 prefect>=3.0
 xgboost

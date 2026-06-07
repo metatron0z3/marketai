@@ -2,7 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.db import get_db_connection
 from .api.v1.api import api_router
-from .modules.options.db.schema import create_options_tables, create_massive_tables, create_whale_tables
+from .modules.options.db.schema import (
+    create_enrichment_tables,
+    create_massive_tables,
+    create_options_tables,
+    create_whale_tables,
+)
 
 app = FastAPI()
 
@@ -21,6 +26,10 @@ def on_startup():
         create_massive_tables()
     except Exception as exc:
         print(f"Warning: could not create massive tables: {exc}")
+    try:
+        create_enrichment_tables()
+    except Exception as exc:
+        print(f"Warning: could not create enrichment tables: {exc}")
 
 # CORS Middleware
 origins = [
