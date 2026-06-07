@@ -1,0 +1,93 @@
+version: "3.9"
+
+# TOS Collector stack — runs alongside MarketAI.
+# Both stacks share the `marketai_default` network so they can
+# reach each other (MarketAI ML flows trigger TOS collector flows
+# via the shared Prefect server at port 4200).
+#
+# Start: docker-compose up --build
+# First run after API key is live:
+#   docker-compose exec tos-collector python -m flows.deploy --run-backfill
+
+services:
+
+  # ── TOS QuestDB (time-series) ─────────────────────────────────────────────
+  tos-questdb:
+    image: questdb/questdb:latest
+    restart: unless-stopped
+    ports:
+      - "9100:9000"   # HTTP console  →  http://localhost:9100
+      - "9109:9009"   # ILP TCP (fast bulk writes)
+      - "8812:8812"   # PostgreSQL wire protocol
+    volumes:
+      - tos-questdb-data:/var/lib/questdb
+    environment:
+      QDB_TELEMETRY_ENABLED: "false"
+
+  # ── TOS Postgres (signal_catalog, baselines, earnings) ────────────────────
+  tos-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB:       tos
+      POSTGRES_USER:     tos_writer
+      POSTGRES_PASSWORD: tos_writer
+    volumes:
+      - tos-postgres-data:/var/lib/postgresql/data
+      - ./init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  # ── TOS Collector (Prefect worker + flows) ────────────────────────────────
+  tos-collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - tos-questdb
+      - tos-postgres
+    environment:
+      # Schwab API credentials (set in .env file, never commit)
+      SCHWAB_API_KEY:      ${SCHWAB_API_KEY}
+      SCHWAB_APP_SECRET:   ${SCHWAB_APP_SECRET}
+      SCHWAB_CALLBACK_URL: ${SCHWAB_CALLBACK_URL:-https://127.0.0.1}
+      TOS_TOKEN_PATH:      /app/.tos_token.json
+
+      # Database connections
+      TOS_QUESTDB_HOST:    tos-questdb
+      TOS_QUESTDB_PORT:    9000       # internal port (mapped to 9100 externally)
+      TOS_QUESTDB_ILP_PORT: 9009
+      TOS_POSTGRES_HOST:   tos-postgres
+      TOS_POSTGRES_PORT:   5432
+      TOS_POSTGRES_DB:     tos
+      TOS_POSTGRES_USER:   tos_writer
+      TOS_POSTGRES_PASS:   tos_writer
+
+      # Prefect — points to MarketAI's shared Prefect server
+      PREFECT_API_URL:     ${PREFECT_API_URL:-http://prefect-server:4200/api}
+
+      # Rate limiting
+      TOS_RATE_LIMIT:      100
+    volumes:
+      - tos-token:/app/token   # persist OAuth token across restarts
+    command: >
+      prefect worker start --pool default --type process
+
+  # ── Prefect worker (separate process for TOS flows) ───────────────────────
+  # Uncomment if you want a dedicated worker instead of using MarketAI's pool:
+  # tos-prefect-worker:
+  #   image: prefecthq/prefect:3-latest
+  #   command: prefect worker start --pool tos-pool --type process
+  #   environment:
+  #     PREFECT_API_URL: ${PREFECT_API_URL:-http://prefect-server:4200/api}
+
+volumes:
+  tos-questdb-data:
+  tos-postgres-data:
+  tos-token:
+
+networks:
+  default:
+    name: marketai_default
+    external: true   # joins MarketAI's network for shared Prefect server access
