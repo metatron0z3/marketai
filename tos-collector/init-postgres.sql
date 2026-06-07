@@ -150,5 +150,6 @@ INSERT INTO watchlist (symbol, name, sector) VALUES
     ('AMZN', 'Amazon.com Inc.',         'Technology/Consumer'),
     ('MSFT', 'Microsoft Corporation',   'Technology'),
     ('GLD',  'SPDR Gold Shares',        'Commodities'),
-    ('TLT',  'iShares 20+ Year Treasury Bond ETF', 'Fixed Income/Macro')
+    ('TLT',  'iShares 20+ Year Treasury Bond ETF', 'Fixed Income/Macro'),
+    ('PLTR', 'Palantir Technologies',  'Defense/Government Tech')
 ON CONFLICT (symbol) DO NOTHING;

@@ -15,12 +15,9 @@ from datetime import datetime, timezone
 
 from prefect import flow, get_run_logger, task
 
-log = logging.getLogger(__name__)
+from config import WATCHLIST
 
-WATCHLIST = [
-    "TSLA", "NVDA", "SPY", "QQQ", "AAPL",
-    "AMD", "META", "AMZN", "MSFT", "GLD", "TLT",
-]
+log = logging.getLogger(__name__)
 
 
 @task(name="snapshot_and_detect", retries=2, retry_delay_seconds=15)

@@ -18,12 +18,9 @@ from datetime import date, timedelta
 from prefect import flow, get_run_logger, task
 from prefect.task_runners import SequentialTaskRunner
 
-log = logging.getLogger(__name__)
+from config import WATCHLIST
 
-WATCHLIST = [
-    "TSLA", "NVDA", "SPY", "QQQ", "AAPL",
-    "AMD", "META", "AMZN", "MSFT", "GLD", "TLT",
-]
+log = logging.getLogger(__name__)
 
 BACKFILL_DAYS        = 90    # chain history to pull (trading days)
 PRICE_HISTORY_YEARS  = 2     # OHLCV daily lookback

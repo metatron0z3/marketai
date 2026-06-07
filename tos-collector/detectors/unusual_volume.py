@@ -12,13 +12,15 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-log = logging.getLogger(__name__)
+from config import (
+    CHAIN_MAX_DTE as MAX_DTE,
+    CHAIN_MIN_DTE as MIN_DTE,
+    UV_MIN_PREMIUM as MIN_PREMIUM,
+    UV_MIN_VOLUME as MIN_VOLUME,
+    UV_VOLUME_RATIO_THRESHOLD as VOLUME_RATIO_THRESHOLD,
+)
 
-VOLUME_RATIO_THRESHOLD = 3.0
-MIN_VOLUME             = 500
-MIN_PREMIUM            = 50_000
-MIN_DTE                = 1
-MAX_DTE                = 90
+log = logging.getLogger(__name__)
 
 
 def compute_baselines(chain_rows: list[dict]) -> dict[tuple, dict]:

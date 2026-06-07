@@ -6,13 +6,9 @@ import logging
 from datetime import datetime, timezone
 
 from collectors.schwab_client import get_client
+from config import WATCHLIST
 
 log = logging.getLogger(__name__)
-
-WATCHLIST = [
-    "TSLA", "NVDA", "SPY", "QQQ", "AAPL",
-    "AMD", "META", "AMZN", "MSFT", "GLD", "TLT", "$VIX.X",
-]
 
 
 def collect_daily_ohlcv(symbol: str, years: int = 2) -> list[dict]:

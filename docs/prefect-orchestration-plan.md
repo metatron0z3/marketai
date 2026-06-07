@@ -10,8 +10,8 @@ stream of labeled training data and live signals.
 
 ## Ticker Universe
 
-Current watchlist of 11 symbols. We may expand this list — new tickers can be added
-to the `WATCHLIST` constant in each collector/flow file.
+Current watchlist of 12 symbols. We may expand this list — new tickers can be added
+to `WATCHLIST` in `tos-collector/config.py` (single source of truth).
 
 ---
 
@@ -49,6 +49,14 @@ The seven stocks that have dominated S&P 500 returns since 2023. We hold 6 of 7
 
 ---
 
+### Defense / Government Tech
+
+| Symbol | Name | Significance |
+|--------|------|--------------|
+| **PLTR** | Palantir Technologies | Retail darling with unusually high unusual-volume hit rate. AI/defense government contracts provide steady institutional flow alongside heavy retail speculation. Strong candidate for directional sweep signals — options market is liquid and active. |
+
+---
+
 ### Macro Hedges / Alternatives
 
 | Symbol | Name | Significance |
@@ -64,7 +72,6 @@ The seven stocks that have dominated S&P 500 returns since 2023. We hold 6 of 7
 |--------|----------------|
 | GOOGL/GOOG | Completes MAG7; large institutional options market |
 | SMCI | High beta to AI/NVDA narrative; extreme gamma exposure events |
-| PLTR | Retail darling; high unusual volume hit rate |
 | MSTR | Bitcoin proxy; extreme gamma squeeze candidate |
 | IWM | Small-cap index; risk-on/off leading indicator |
 | SPX | Index options (cash-settled); 0DTE gamma analysis |

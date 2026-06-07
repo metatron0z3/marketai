@@ -10,17 +10,13 @@ from datetime import date, datetime, timezone
 from typing import Iterator
 
 from collectors.schwab_client import get_client
+from config import CHAIN_MAX_DTE, CHAIN_MIN_DTE, WATCHLIST
 
 log = logging.getLogger(__name__)
 
-WATCHLIST = [
-    "TSLA", "NVDA", "SPY", "QQQ", "AAPL",
-    "AMD", "META", "AMZN", "MSFT", "GLD", "TLT",
-]
-
 # Only collect contracts within this DTE range
-MIN_DTE = 1
-MAX_DTE = 90
+MIN_DTE = CHAIN_MIN_DTE
+MAX_DTE = CHAIN_MAX_DTE
 
 
 def _safe(d: dict, *keys, default=None):

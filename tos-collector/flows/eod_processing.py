@@ -12,12 +12,9 @@ import logging
 
 from prefect import flow, get_run_logger, task
 
-log = logging.getLogger(__name__)
+from config import WATCHLIST
 
-WATCHLIST = [
-    "TSLA", "NVDA", "SPY", "QQQ", "AAPL",
-    "AMD", "META", "AMZN", "MSFT", "GLD", "TLT",
-]
+log = logging.getLogger(__name__)
 
 MIN_NEW_LABELED_FOR_RETRAIN = 20
 
