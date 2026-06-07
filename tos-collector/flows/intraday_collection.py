@@ -59,6 +59,29 @@ def update_iv_surface(symbol: str) -> None:
         write_iv_surface(surface)
 
 
+@task(name="collect_5m_bars", retries=1)
+def collect_5m_bars(symbol: str) -> int:
+    """Append latest 5-minute bars. Runs every 5 min alongside chain snapshots."""
+    from collectors.price_collector import collect_5min_bars
+    from db.questdb_writer import write_price_bars
+
+    bars = collect_5min_bars(symbol, days=1)   # just today's bars
+    return write_price_bars(bars)
+
+
+@task(name="collect_1m_bars_eod", retries=1)
+def collect_1m_bars_eod(symbol: str) -> int:
+    """
+    Append 1-minute bars for today. Called once at market close (16:00 ET)
+    rather than intraday — 390 bars/day/ticker is high volume to write continuously.
+    """
+    from collectors.price_collector import collect_1min_bars
+    from db.questdb_writer import write_price_bars
+
+    bars = collect_1min_bars(symbol, days=1)
+    return write_price_bars(bars)
+
+
 @task(name="check_market_hours")
 def check_market_hours() -> bool:
     """Returns True if current time is within regular market hours (ET)."""
@@ -119,21 +142,29 @@ def intraday_collection_flow(force: bool = False) -> dict:
     now = datetime.now(tz=timezone.utc)
     run_iv = now.minute < 5   # run IV surface update at the top of each hour
 
+    now_et_hour   = now.hour - 4   # rough ET conversion
+    run_1m_eod    = now_et_hour == 16   # collect 1m bars at market close
+
     results = []
     for symbol in WATCHLIST:
         result = snapshot_and_detect(symbol)
         results.append(result)
+        collect_5m_bars(symbol)     # 5m bars every tick alongside chain
         if run_iv:
             update_iv_surface(symbol)
+        if run_1m_eod:
+            collect_1m_bars_eod(symbol)
 
     total_events = sum(r["events"] for r in results)
-    logger.info("Intraday tick: %d events across %d tickers", total_events, len(WATCHLIST))
+    logger.info("Intraday tick: %d events across %d tickers (5m bars collected)",
+                total_events, len(WATCHLIST))
 
     return {
         "status":       "ok",
         "tick_time":    now.isoformat(),
         "total_events": total_events,
         "iv_updated":   run_iv,
+        "1m_eod":       run_1m_eod,
         "by_symbol":    results,
     }
 

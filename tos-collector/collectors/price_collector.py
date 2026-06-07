@@ -49,8 +49,70 @@ def collect_hourly_bars(symbol: str, months: int = 6) -> list[dict]:
     return _parse_bars(raw, symbol, "1h")
 
 
+def collect_5min_bars(symbol: str, days: int = 10) -> list[dict]:
+    """
+    Pull 5-minute bars. Schwab limits intraday history to 10 days per request.
+    For backfill beyond 10 days use collect_5min_bars_chunked().
+    """
+    client = get_client()
+    log.info("Pulling %dd 5m bars for %s", days, symbol)
+
+    raw = client.get_price_history(
+        symbol=symbol,
+        period_type="day",
+        period=min(days, 10),
+        frequency_type="minute",
+        frequency=5,
+        need_extended_hours=False,
+    )
+    return _parse_bars(raw, symbol, "5m")
+
+
+def collect_5min_bars_chunked(symbol: str, total_days: int = 90) -> list[dict]:
+    """
+    Pull 5-minute bars going back up to total_days by requesting 10-day
+    chunks and concatenating. Used for initial historical backfill only.
+    Deduplication is handled by QuestDB's timestamp partitioning.
+    """
+    import time
+    from datetime import date, timedelta
+
+    all_bars: list[dict] = []
+    client = get_client()
+
+    chunk_size = 10
+    chunks = (total_days + chunk_size - 1) // chunk_size
+
+    end_date = date.today() - timedelta(days=1)
+    for i in range(chunks):
+        chunk_end   = end_date - timedelta(days=i * chunk_size)
+        chunk_start = chunk_end - timedelta(days=chunk_size - 1)
+        log.info("5m chunk %d/%d for %s: %s → %s",
+                 i + 1, chunks, symbol, chunk_start, chunk_end)
+        raw = client.get_price_history(
+            symbol=symbol,
+            period_type="day",
+            period=chunk_size,
+            frequency_type="minute",
+            frequency=5,
+            start_datetime=datetime(chunk_start.year, chunk_start.month, chunk_start.day,
+                                   tzinfo=timezone.utc),
+            end_datetime=datetime(chunk_end.year, chunk_end.month, chunk_end.day,
+                                 23, 59, tzinfo=timezone.utc),
+            need_extended_hours=False,
+        )
+        all_bars.extend(_parse_bars(raw, symbol, "5m"))
+        time.sleep(0.7)   # rate limit headroom
+
+    log.info("5m chunked: %d total bars for %s", len(all_bars), symbol)
+    return all_bars
+
+
 def collect_1min_bars(symbol: str, days: int = 10) -> list[dict]:
-    """Pull 1-minute bars for recent intraday data."""
+    """
+    Pull 1-minute bars. Schwab limits intraday history to 10 days per request.
+    Collect daily at EOD — too high volume to write intraday.
+    """
     client = get_client()
     log.info("Pulling %dd 1m bars for %s", days, symbol)
 

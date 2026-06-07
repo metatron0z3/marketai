@@ -8,6 +8,69 @@ stream of labeled training data and live signals.
 
 ---
 
+## Ticker Universe
+
+Current watchlist of 11 symbols. We may expand this list — new tickers can be added
+to the `WATCHLIST` constant in each collector/flow file.
+
+---
+
+### Index ETFs — Macro & Regime Context
+
+| Symbol | Name | Significance |
+|--------|------|--------------|
+| **SPY** | SPDR S&P 500 ETF Trust | Most liquid options market on earth. ~50% of daily S&P options volume is now 0DTE. Non-negotiable for market regime context, macro sentiment, and put/call ratio baselines. |
+| **QQQ** | Invesco QQQ Trust (Nasdaq-100) | Tech-heavy growth index. Leads SPY on tech/rate sentiment shifts. Heavy institutional put flows on QQQ often precede broad market selloffs by 1–2 days. |
+
+---
+
+### MAG7 — Magnificent Seven (6 of 7 currently tracked)
+
+The seven stocks that have dominated S&P 500 returns since 2023. We hold 6 of 7
+(missing GOOGL — natural first addition to the watchlist).
+
+| Symbol | Name | Options Flow Character |
+|--------|------|------------------------|
+| **TSLA** | Tesla Inc. | Highest retail options volume of any single stock. Enormous sweep activity around Elon news, earnings, and macro events. Primary ticker for initial ML training — most historical data already collected. Wild IV swings make unusual volume detection highly informative. |
+| **NVDA** | NVIDIA Corporation | AI infrastructure play. Largest sweeps on the watchlist. Smart money flows here tend to be highly directional and play out over days/weeks — best signal quality of any single name. Essential. |
+| **AAPL** | Apple Inc. | Largest U.S. market cap. Heavily institutional — options flow skews toward covered calls and hedges rather than speculation. Unusual calls worth watching pre-product launches and earnings. Lower noise ratio than TSLA/NVDA. |
+| **MSFT** | Microsoft Corporation | Cloud + Copilot AI. More institutional, less retail than other MAG7 names. Sweeps often precede earnings surprises; relatively clean signal. |
+| **AMZN** | Amazon.com Inc. | AWS cloud + consumer retail. High beta to macro. Major mover on earnings. Good sweep activity when AI/cloud narrative is in play. |
+| **META** | Meta Platforms | Social media + ad revenue + AI infrastructure (LLaMA). High retail interest with good institutional sweep activity. Solid unusual volume hit rate historically. |
+| *(GOOGL)* | *(Alphabet — not yet tracked)* | *Completes MAG7. High institutional volume. Covered calls dominant. Add when expanding watchlist.* |
+
+---
+
+### Semiconductors — Sector Contagion Pair
+
+| Symbol | Name | Significance |
+|--------|------|--------------|
+| **AMD** | Advanced Micro Devices | Direct NVDA competitor in GPU and server CPU. Often moves in sympathy with NVDA — critical for the sector contagion research module. An NVDA sweep followed by AMD unusual volume within 24h is a strong confirmation signal. |
+
+---
+
+### Macro Hedges / Alternatives
+
+| Symbol | Name | Significance |
+|--------|------|--------------|
+| **GLD** | SPDR Gold Shares ETF | Gold proxy. Spikes on inflation and geopolitical risk. Put/call skew on GLD signals institutional risk-off positioning. Useful as a regime feature — high GLD call volume often accompanies vol expansion regimes. |
+| **TLT** | iShares 20+ Year Treasury Bond ETF | Long-duration bonds. Inversely correlated with rates. Unusual put volume on TLT often leads rate-driven equity selloffs by 1–2 days — one of the better leading macro indicators in the watchlist. |
+
+---
+
+### Potential Additions (not yet tracked)
+
+| Symbol | Why it belongs |
+|--------|----------------|
+| GOOGL/GOOG | Completes MAG7; large institutional options market |
+| SMCI | High beta to AI/NVDA narrative; extreme gamma exposure events |
+| PLTR | Retail darling; high unusual volume hit rate |
+| MSTR | Bitcoin proxy; extreme gamma squeeze candidate |
+| IWM | Small-cap index; risk-on/off leading indicator |
+| SPX | Index options (cash-settled); 0DTE gamma analysis |
+
+---
+
 ## Why Prefect?
 
 MarketAI already runs Prefect (port 4200). The TOS collector registers its flows with
@@ -79,6 +142,41 @@ per ticker per trading day at 15:55 ET (last 5 minutes, highest volume).
 - Pull ALL strikes (range=ALL), ALL expiries up to 90 DTE
 - Schwab historical chain availability: typically 2-5 years back for liquid names
 - Rate limit: ~120 requests/min on free tier; 360 calls = 3 minutes at safe pace
+
+---
+
+#### 1.4 Intraday Bars — 5-Minute and 1-Minute OHLCV
+
+**Why Tier 1 (end of backfill):** These bars are not needed for the options ML
+pipeline (which uses daily/hourly price data for label computation and features).
+They are collected now as the **foundation for a future intraday support/resistance
+ML pipeline** — one that will trade based on intraday structure rather than overnight
+directional signals. Building this dataset from day 1 means it will have meaningful
+depth by the time that pipeline is ready.
+
+**API limitation:** Schwab restricts intraday bars to 10 days per request. For the
+initial backfill we pull the last 10 days and then accumulate continuously via the
+intraday flow. After 90 days of running you'll have a full quarter of 5m history.
+
+**What to pull:**
+- **5-minute bars:** Last 10 days on first run, then appended daily. Used for:
+  - Intraday swing support/resistance structure
+  - Volume profile computation (VWAP deviation, volume at price)
+  - VWAP anchored to unusual volume event times (did price come back?)
+  - Opening range breakout detection
+- **1-minute bars:** Last 10 days on first run, then appended daily. Used for:
+  - Precise entry/exit structure around support/resistance
+  - Microstructure features (bid-ask bounce, tape speed)
+  - High-resolution gamma squeeze detection (price acceleration)
+  - Future tick-level model training
+
+**Collection schedule (ongoing):** 5m bars collected every 5 minutes via the
+intraday flow (same cadence as chain snapshots). 1m bars appended at EOD for
+the current day — too many rows to write intraday without QuestDB pressure.
+
+**Storage estimate:** 11 tickers × 78 5m bars/day × 252 days/yr = ~216,000 rows/yr.
+11 tickers × 390 1m bars/day × 252 days/yr = ~1.08M rows/yr. QuestDB handles this
+trivially.
 
 ---
 

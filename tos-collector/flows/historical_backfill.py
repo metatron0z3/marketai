@@ -244,6 +244,34 @@ def init_earnings_calendar() -> int:
 
 
 # ---------------------------------------------------------------------------
+# STEP 8 — Intraday bars (5m + 1m) — run last, future support/resistance pipeline
+# ---------------------------------------------------------------------------
+
+@task(name="backfill_intraday_bars_symbol", retries=2, retry_delay_seconds=30)
+def backfill_intraday_bars_symbol(symbol: str, days_5m: int = 90, days_1m: int = 10) -> dict:
+    """
+    Pull 5-minute and 1-minute bars for a single symbol.
+
+    5m bars: chunked over days_5m (Schwab API limit = 10 days/call, so this makes
+             multiple requests). Builds the foundation for the future intraday
+             support/resistance ML pipeline.
+    1m bars: last days_1m only (10 day API max per call). Appended daily going forward.
+    """
+    logger = get_run_logger()
+    from collectors.price_collector import collect_1min_bars, collect_5min_bars_chunked
+    from db.questdb_writer import write_price_bars
+
+    bars_5m = collect_5min_bars_chunked(symbol, total_days=days_5m)
+    n_5m    = write_price_bars(bars_5m)
+
+    bars_1m = collect_1min_bars(symbol, days=days_1m)
+    n_1m    = write_price_bars(bars_1m)
+
+    logger.info("%s: wrote %d 5m bars + %d 1m bars", symbol, n_5m, n_1m)
+    return {"symbol": symbol, "bars_5m": n_5m, "bars_1m": n_1m}
+
+
+# ---------------------------------------------------------------------------
 # Master backfill flow
 # ---------------------------------------------------------------------------
 
@@ -293,6 +321,12 @@ def historical_backfill_flow(
     logger.info("STEP 6: Earnings calendar")
     earnings_result = init_earnings_calendar()
 
+    logger.info("=" * 60)
+    logger.info("STEP 7: Intraday bars (5m + 1m) — future support/resistance pipeline")
+    intraday_results = [backfill_intraday_bars_symbol(sym) for sym in targets]
+    total_5m = sum(r["bars_5m"] for r in intraday_results)
+    total_1m = sum(r["bars_1m"] for r in intraday_results)
+
     total_events = sum(uv_results)
     total_labeled = label_result.get("labeled_5d", 0)
 
@@ -300,13 +334,17 @@ def historical_backfill_flow(
     logger.info("BACKFILL COMPLETE")
     logger.info("  Total unusual events detected: %d", total_events)
     logger.info("  Labeled (5d follow-through):   %d", total_labeled)
+    logger.info("  5m bars written:               %d", total_5m)
+    logger.info("  1m bars written:               %d", total_1m)
     logger.info("  Ready for first training run:  %s", total_labeled >= 100)
 
     return {
-        "status":        "complete",
-        "symbols":       targets,
-        "total_events":  total_events,
-        "labeled_5d":    total_labeled,
+        "status":         "complete",
+        "symbols":        targets,
+        "total_events":   total_events,
+        "labeled_5d":     total_labeled,
+        "bars_5m":        total_5m,
+        "bars_1m":        total_1m,
         "training_ready": total_labeled >= 100,
     }
 
