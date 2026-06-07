@@ -15,7 +15,7 @@ export class InstrumentsController {
     description: 'List of available instruments',
     type: [InstrumentDto],
   })
-  findAll(): InstrumentDto[] {
+  async findAll(): Promise<InstrumentDto[]> {
     return this.instrumentsService.findAll();
   }
 

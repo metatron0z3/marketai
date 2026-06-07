@@ -13,6 +13,7 @@ import { RouterModule } from '@angular/router';
           <h1>MarketAI</h1>
         </div>
         <div class="navbar-menu">
+          <a routerLink="/data-overview" routerLinkActive="active" class="nav-link">Data Overview</a>
           <a routerLink="/market-data" routerLinkActive="active" class="nav-link">Market Data</a>
           <a routerLink="/animated-chart" routerLinkActive="active" class="nav-link">Live Chart</a>
           <a routerLink="/ingest" routerLinkActive="active" class="nav-link">Data Ingestion</a>

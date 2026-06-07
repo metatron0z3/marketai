@@ -15,7 +15,7 @@ export class DataRangesService {
   async getDataRanges(): Promise<DataRangesResponseDto> {
     this.logger.log('Fetching data ranges for all instruments');
 
-    const instruments = this.instrumentsService.findAll();
+    const instruments = await this.instrumentsService.findAll();
     const symbolRanges: SymbolRangeDto[] = [];
 
     for (const instrument of instruments) {
