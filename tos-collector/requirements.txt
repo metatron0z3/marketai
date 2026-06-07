@@ -1,0 +1,8 @@
+schwab-py>=1.0
+prefect>=3.0
+psycopg2-binary
+questdb>=1.1       # ILP ingress for fast QuestDB writes
+yfinance>=0.2.40
+zoneinfo; python_version < "3.9"
+numpy
+pandas
