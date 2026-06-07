@@ -4,7 +4,7 @@ psycopg2-binary==2.9.10
 pandas==2.2.2
 gunicorn==22.0.0
 sqlalchemy
-databento
+databento  # legacy: required only for POST /ingest/upload (Databento .dbn file path)
 requests
 python-multipart
 lightgbm
@@ -12,3 +12,5 @@ scikit-learn
 mlflow
 py_vollib
 torch
+yfinance>=0.2.40
+prefect>=3.0
