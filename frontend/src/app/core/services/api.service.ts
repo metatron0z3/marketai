@@ -63,6 +63,10 @@ export class ApiService {
     return this.http.get<any>(`${this.apiUrl}/data-ranges`);
   }
 
+  getDataOverview(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/data-overview`);
+  }
+
   getOptionsSignals(n: number = 20, lookbackMinutes: number = 30): Observable<any> {
     const params = new HttpParams()
       .set('n', n.toString())

@@ -1,10 +1,10 @@
-fastapi==0.110.0
+fastapi>=0.111.0
 uvicorn==0.29.0
 psycopg2-binary==2.9.10
 pandas==2.2.2
 gunicorn==22.0.0
 sqlalchemy
-databento
+databento  # legacy: required only for POST /ingest/upload (Databento .dbn file path)
 requests
 python-multipart
 lightgbm
@@ -14,3 +14,10 @@ py_vollib
 torch
 anthropic>=0.40.0
 questdb
+yfinance>=0.2.40
+prefect>=3.0
+xgboost
+statsmodels
+hdbscan
+scipy
+shap
