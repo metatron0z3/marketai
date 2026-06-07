@@ -15,6 +15,7 @@ import { OptionsSignalsModule } from './modules/options-signals/options-signals.
 import { OptionsFlowModule } from './modules/options-flow/options-flow.module';
 import { OptionsPredictionsModule } from './modules/options-predictions/options-predictions.module';
 import { OptionsWhaleModule } from './modules/options-whale/options-whale.module';
+import { TosSignalsModule } from './modules/tos-signals/tos-signals.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -36,6 +37,7 @@ import configuration from './config/configuration';
     OptionsFlowModule,
     OptionsPredictionsModule,
     OptionsWhaleModule,
+    TosSignalsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

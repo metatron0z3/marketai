@@ -14,3 +14,8 @@ py_vollib
 torch
 yfinance>=0.2.40
 prefect>=3.0
+xgboost
+statsmodels
+hdbscan
+scipy
+shap
