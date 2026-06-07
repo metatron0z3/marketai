@@ -12,3 +12,5 @@ scikit-learn
 mlflow
 py_vollib
 torch
+anthropic>=0.40.0
+questdb

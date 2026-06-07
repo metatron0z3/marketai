@@ -56,6 +56,55 @@ def create_options_tables() -> None:
         resp.raise_for_status()
 
 
+def create_enrichment_tables() -> None:
+    """
+    options_enrichment: one row per LLM-classified options bar.
+    llm_audit_log: immutable record of every Anthropic API call (cost tracking).
+    """
+    host = os.getenv("QUESTDB_HOST", "questdb")
+    base_url = f"http://{host}:9000"
+
+    tables = [
+        """
+        CREATE TABLE IF NOT EXISTS options_enrichment (
+            enriched_at       TIMESTAMP,
+            ts_event          TIMESTAMP,
+            symbol            SYMBOL,
+            strike            DOUBLE,
+            expiration        DATE,
+            put_call          SYMBOL,
+            activity_type     SYMBOL,
+            conviction_score  DOUBLE,
+            narrative         STRING,
+            model             SYMBOL,
+            prompt_tokens     INT,
+            completion_tokens INT,
+            cost_usd          DOUBLE,
+            latency_ms        INT
+        ) TIMESTAMP(enriched_at) PARTITION BY MONTH;
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS llm_audit_log (
+            called_at         TIMESTAMP,
+            caller            SYMBOL,
+            model             SYMBOL,
+            symbol            SYMBOL,
+            prompt_tokens     INT,
+            completion_tokens INT,
+            cost_usd          DOUBLE,
+            latency_ms        INT,
+            status            SYMBOL,
+            error_msg         STRING,
+            flow_run_id       STRING
+        ) TIMESTAMP(called_at) PARTITION BY MONTH;
+        """,
+    ]
+
+    for ddl in tables:
+        resp = requests.get(base_url + "/exec", params={"query": ddl.strip()})
+        resp.raise_for_status()
+
+
 def create_whale_tables() -> None:
     host = os.getenv("QUESTDB_HOST", "questdb")
     base_url = f"http://{host}:9000"
