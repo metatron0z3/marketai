@@ -8,6 +8,7 @@ from .modules.options.db.schema import (
     create_options_tables,
     create_whale_tables,
 )
+from .modules.agents.db.schema import create_agent_tables
 
 app = FastAPI()
 
@@ -30,6 +31,10 @@ def on_startup():
         create_enrichment_tables()
     except Exception as exc:
         print(f"Warning: could not create enrichment tables: {exc}")
+    try:
+        create_agent_tables()
+    except Exception as exc:
+        print(f"Warning: could not create agent tables: {exc}")
 
 # CORS Middleware
 origins = [

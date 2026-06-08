@@ -21,3 +21,12 @@ statsmodels
 hdbscan
 scipy
 shap
+
+# LangGraph multi-agent pipeline
+langgraph>=0.2
+langchain-core>=0.3
+langchain-anthropic>=0.3
+langchain-openai>=0.2
+langchain-google-genai>=2.0
+langchain-ollama>=0.2
+langsmith>=0.2
