@@ -122,6 +122,33 @@ The initial agent skeleton built before switching to LangGraph. Retained because
 
 ---
 
+---
+
+## 2026-06-07 — Session 2: Rewrite `docs/multi-agent-plan.md`
+
+### Commit: `docs: rewrite multi-agent-plan to reflect LangGraph architecture`
+**File**: `docs/multi-agent-plan.md`
+
+The "core plan" file still described the pre-LangGraph design: custom `LLMBackend` Protocol,
+`model_registry.py` with `get_backend()`, Prefect-only multi-agent flow calling agent class
+methods directly. It had no mention of LangGraph, LangSmith, `GraphState`, `StateGraph`,
+`build_chat_model()`, DeepSeek, `QDBCostCallback`, or SSE streaming.
+
+Full rewrite to match the `docs/agentic/` phase documents:
+- Framework decision section (LangGraph chosen over PydanticAI + CrewAI for LangSmith observability)
+- Provider table with all 10 aliases including `deepseek-chat` and `deepseek-r1`
+- `StateGraph` topology diagram replacing the old CoordinatorAgent tree
+- `GraphState` TypedDict snippet showing `operator.add` reducer for fan-out
+- Node Roles table (8 nodes, code vs LLM, structured output type)
+- Implementation Phases table pointing to `docs/agentic/` for details
+- Updated cost estimate (DeepSeek-chat alternative: ~$0.05/day vs $0.27/day)
+- Environment variables section (LangSmith + DeepSeek + per-node aliases)
+- Open Decisions replacing the old "Open Questions" (reflects LangGraph decisions already made)
+
+Old custom backend code (Steps 1–7, 120+ lines) fully removed.
+
+---
+
 ## What Comes Next (pending user agent adjustments)
 
 1. User to finalize agent role definitions
