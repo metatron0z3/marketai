@@ -185,3 +185,92 @@ def get_run_log(
         LIMIT {limit}
     """)
     return {"count": len(rows), "results": rows}
+
+
+# ---------------------------------------------------------------------------
+# Education / explainer endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/explain/topics")
+def list_explainer_topics():
+    """
+    Return all topics available for on-demand explainer generation.
+
+    Groups them by category so the Angular /docs sidebar can render a tree.
+    Each entry includes the slug (use it in POST /explain), title, category,
+    and a short description of what the explainer covers.
+    """
+    from app.modules.agents.education.education_graph import list_topics
+    topics = list_topics()
+    by_category: dict[str, list] = {}
+    for t in topics:
+        by_category.setdefault(t["category"], []).append(t)
+    return {"total": len(topics), "categories": by_category}
+
+
+class ExplainRequest(BaseModel):
+    slug: str
+    model_alias: Optional[str] = None
+    dry_run: bool = False
+
+
+@router.post("/explain")
+async def generate_explainer(body: ExplainRequest):
+    """
+    Generate and persist a TechnicalExplainer for the given topic slug.
+
+    Runs the education graph in-process (load_context → explainer LLM call →
+    persist to technical_explainers QuestDB table).
+
+    Returns the explainer immediately. A subsequent GET /explain/{slug}
+    will serve it from QuestDB.
+
+    Use GET /explain/topics to browse available slugs.
+    """
+    from langchain_core.runnables import RunnableConfig
+    from app.modules.agents.education.education_graph import (
+        build_education_graph,
+        make_education_initial_state,
+    )
+    from app.modules.llm.qdb_callback import QDBCostCallback
+
+    graph  = build_education_graph()
+    state  = make_education_initial_state(
+        topic_slug=body.slug,
+        model_alias=body.model_alias,
+        dry_run=body.dry_run,
+    )
+    config = RunnableConfig(callbacks=[QDBCostCallback(agent_name="education_graph")])
+
+    try:
+        result = graph.invoke(state, config=config)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    if result.get("errors"):
+        raise HTTPException(status_code=422, detail=result["errors"])
+
+    return {
+        "slug":      body.slug,
+        "explainer": result.get("explainer"),
+        "errors":    result.get("errors", []),
+    }
+
+
+@router.get("/explain/{slug}")
+def get_explainer(slug: str):
+    """Retrieve a stored TechnicalExplainer from QuestDB by topic slug."""
+    rows = _qdb_query(f"""
+        SELECT topic, category, audience, body, key_invariants, gotchas, recorded_at
+        FROM technical_explainers
+        WHERE slug = '{slug}'
+        ORDER BY recorded_at DESC
+        LIMIT 1
+    """)
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No explainer found for slug {slug!r}. "
+                   f"Generate one first with POST /explain.",
+        )
+    return rows[0]

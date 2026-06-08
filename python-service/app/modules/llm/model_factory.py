@@ -82,6 +82,7 @@ AGENT_MODEL_ENVS: dict[str, str] = {
     "synthesis":     os.getenv("SYNTHESIS_MODEL",     "sonnet"),
     "archive":       os.getenv("ARCHIVE_MODEL",       "sonnet"),
     "archive_deep":  os.getenv("ARCHIVE_DEEP_MODEL",  "opus"),
+    "education":     os.getenv("EDUCATION_MODEL",     "sonnet"),
 }
 
 
