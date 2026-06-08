@@ -344,7 +344,204 @@ def end_early_node(state: GraphState) -> dict:
 
 ---
 
-## 3.10 — Prompt Design Principles
+## 3.10 — archive_node (Historical / Education Agent)
+
+**File**: `agents/graph/nodes/archive_node.py`  
+**Type**: LLM — full-tier, 3–5 calls per run  
+**Default model**: `sonnet` (or `opus` for the technical explainer pass)  
+**Schedule**: weekly (Sunday 00:00 ET) + milestone-triggered  
+**Graph**: separate `ArchiveGraphState` + `build_archive_graph()` — does NOT share state with the analysis graph
+
+---
+
+### Role
+
+The archive agent is the project's institutional memory. It has two audiences:
+- **Future self** (the developer): a structured record of what was built, why, and how it performed
+- **Outside reader** (informed technical reader): clear explanations of deeply technical subsystems
+
+It never makes trading decisions. It reads the system's outputs and writes documentation.
+
+---
+
+### Pydantic output models
+
+```python
+class GlossaryEntry(BaseModel):
+    term: str
+    definition: str                    # plain English, 2-3 sentences
+    concrete_example: str              # real ticker, real number, real formula
+    related_terms: list[str]
+    source_file: str | None            # code file where this concept lives
+
+class Milestone(BaseModel):
+    date: str                          # YYYY-MM-DD
+    title: str                         # one line
+    description: str                   # what changed and why (2-4 sentences)
+    technical_detail: str              # the non-obvious part a reader needs
+    impact: str                        # what this unlocked or fixed
+
+class TechnicalExplainer(BaseModel):
+    topic: str                         # e.g. "ConvictionScorer formula"
+    audience: str                      # "informed developer, first time reading"
+    body: str                          # 3-6 paragraphs, markdown
+    key_invariants: list[str]          # things that must remain true for this to work
+    gotchas: list[str]                 # non-obvious failure modes
+
+class PerformanceSummary(BaseModel):
+    period: str                        # e.g. "2026-06-01 to 2026-06-07"
+    signals_flagged: int
+    avg_conviction_score: float
+    top_tickers: list[str]
+    outcomes_available: bool           # False until real data flows
+    narrative: str                     # 2-3 sentences
+
+class ArchiveReport(BaseModel):
+    generated_at: str
+    milestones: list[Milestone]
+    glossary_updates: list[GlossaryEntry]
+    technical_explainers: list[TechnicalExplainer]
+    performance_summary: PerformanceSummary
+    next_focus: str                    # what the archive agent plans to document next run
+```
+
+---
+
+### Node implementation
+
+```python
+def archive_node(state: ArchiveGraphState) -> dict:
+    alias = state["model_aliases"].get("archive", "sonnet")
+    llm   = get_agent_model("archive", override=alias)
+
+    # --- Pass 1: Development log ---
+    git_log   = _read_git_log(since=state["last_archive_date"])
+    worklog   = _read_worklog()
+    milestones_result: list[Milestone] = (
+        llm.with_structured_output(list[Milestone])
+           .invoke(_build_milestone_prompt(git_log, worklog))
+    )
+
+    # --- Pass 2: Glossary update ---
+    existing_terms = _extract_existing_glossary_terms()
+    new_terms      = _discover_new_terms(state["last_archive_date"])
+    glossary_result: list[GlossaryEntry] = (
+        llm.with_structured_output(list[GlossaryEntry])
+           .invoke(_build_glossary_prompt(existing_terms, new_terms))
+    )
+
+    # --- Pass 3: Technical explainer (Opus on demand) ---
+    topic  = _pick_explainer_topic(state)            # next undocumented subsystem
+    explainer_llm = get_agent_model("archive_deep", override=
+        state["model_aliases"].get("archive_deep", "opus"))
+    explainer_result: TechnicalExplainer = (
+        explainer_llm.with_structured_output(TechnicalExplainer)
+                     .invoke(_build_explainer_prompt(topic))
+    )
+
+    # --- Pass 4: Performance summary (code only if no real data yet) ---
+    perf = _read_performance_data(state["last_archive_date"])
+
+    report = ArchiveReport(
+        generated_at=datetime.utcnow().isoformat(),
+        milestones=milestones_result,
+        glossary_updates=glossary_result,
+        technical_explainers=[explainer_result],
+        performance_summary=perf,
+        next_focus=_pick_next_topic(state),
+    )
+
+    return {"archive_report": report.model_dump()}
+```
+
+---
+
+### Input sources
+
+| Source | What it reads | When |
+|---|---|---|
+| `git log --since=<last_archive_date>` | Commit messages + diffs | Every run |
+| `docs/agentic/WORKLOG.md` | Per-commit rationale | Every run |
+| `docs/glossary.html` | Existing term list | Every run |
+| `agent_trade_params` (QuestDB) | Flagged signals + params | Every run |
+| `signal_catalog` (Postgres) | T+1, T+5 outcome labels | When available |
+| `conviction_scores` (QuestDB) | Historical score distribution | When available |
+| Relevant code files | For technical explainers | Per topic |
+
+---
+
+### Output destinations
+
+| Output | Where it goes |
+|---|---|
+| `GlossaryEntry[]` | Regenerates `docs/glossary.html` in place |
+| `Milestone[]` | Written to `project_milestones` QuestDB table |
+| `TechnicalExplainer[]` | Written to `technical_explainers` QuestDB table |
+| `PerformanceSummary` | Written to `archive_reports` QuestDB table |
+| All of the above | Served by `GET /api/v1/archive/` NestJS router → Angular `/docs` section |
+
+---
+
+### QuestDB schema additions
+
+```sql
+CREATE TABLE project_milestones (
+    recorded_at  TIMESTAMP,
+    event_date   DATE,
+    title        STRING,
+    description  STRING,
+    technical_detail STRING,
+    impact       STRING,
+    model_id     SYMBOL
+) TIMESTAMP(recorded_at) PARTITION BY MONTH;
+
+CREATE TABLE technical_explainers (
+    recorded_at  TIMESTAMP,
+    topic        SYMBOL,
+    body         STRING,
+    key_invariants STRING,
+    gotchas      STRING,
+    model_id     SYMBOL
+) TIMESTAMP(recorded_at) PARTITION BY MONTH;
+
+CREATE TABLE archive_reports (
+    generated_at     TIMESTAMP,
+    period_start     DATE,
+    period_end       DATE,
+    signals_flagged  INT,
+    avg_conviction   DOUBLE,
+    outcomes_avail   BOOLEAN,
+    narrative        STRING,
+    next_focus       STRING
+) TIMESTAMP(generated_at) PARTITION BY MONTH;
+```
+
+---
+
+### Angular `/docs` section
+
+A new `ArchiveModule` in Angular consumes:
+```
+GET /api/v1/archive/history          → project_milestones (timeline view)
+GET /api/v1/archive/glossary         → current docs/glossary.html
+GET /api/v1/archive/explainers       → technical_explainers (searchable)
+GET /api/v1/archive/performance      → archive_reports (chart + narrative)
+```
+
+The `/docs` section is a completely separate navigation area from the trading dashboard —
+no shared state, no shared components beyond the nav shell.
+
+---
+
+### Commit checkpoint
+
+```
+feat(agents/phase3): archive_node — historical archive, glossary, technical explainers
+```
+
+---
+
+## 3.11 — Prompt Design Principles
 
 All prompts follow the same three-part structure:
 
@@ -370,19 +567,32 @@ not reasoning from scratch. The heavy quantitative work happens in code nodes.
 
 ## Phase 3 Deliverables
 
+### Analysis graph nodes (9 files)
 - [ ] All 8 node files under `agents/graph/nodes/`
-- [ ] `ResearchContext`, `TradeParams`, `DailyBrief` Pydantic models
-  (in `agents/graph/models.py`)
-- [ ] Prompt builder functions (in `agents/graph/prompts.py`)
+- [ ] `ResearchContext`, `TradeParams`, `DailyBrief` Pydantic models (`agents/graph/models.py`)
+- [ ] Prompt builder functions (`agents/graph/prompts.py`)
 - [ ] Kelly fraction helper (`_compute_kelly`)
 - [ ] `persist_node` wiring to existing QDB ILP writers
 - [ ] Integration test: full graph run on one symbol, `dry_run=True`
 
-## Commit checkpoints (per node)
+### Archive graph (separate)
+- [ ] `agents/archive/state.py` — `ArchiveGraphState` TypedDict
+- [ ] `agents/archive/archive_graph.py` — `build_archive_graph()`
+- [ ] `agents/archive/nodes/archive_node.py` — full implementation
+- [ ] `agents/archive/models.py` — all Pydantic output models
+- [ ] QuestDB schema: `project_milestones`, `technical_explainers`, `archive_reports`
+- [ ] NestJS `ArchiveModule` + `GET /api/v1/archive/` router
+- [ ] Angular `ArchiveModule` with `/docs` section (timeline, glossary, explainers, perf)
+- [ ] Prefect `archive_flow.py` — weekly schedule + milestone trigger
+- [ ] Integration test: dry-run on current git history → glossary update
+
+## Commit checkpoints
 
 ```
 feat(agents/phase3): budget_check + data_node + ml_node (code-only nodes)
 feat(agents/phase3): research_node — ResearchContext structured output
 feat(agents/phase3): strategy_node — TradeParams + Send fan-out
 feat(agents/phase3): synthesis_node — DailyBrief + persist_node
+feat(agents/phase3): archive_node — historical archive, glossary, technical explainers
+feat(agents/phase3): archive frontend — Angular /docs section + NestJS archive router
 ```

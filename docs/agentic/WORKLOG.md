@@ -149,6 +149,37 @@ Old custom backend code (Steps 1–7, 120+ lines) fully removed.
 
 ---
 
+---
+
+## 2026-06-07 — Session 2: Historical/Education Agent added
+
+### Commit: `docs(agents): add archive_node — historical archive, glossary, education agent`
+**Files**: `docs/multi-agent-plan.md`, `docs/agentic/03-agent-nodes.md`
+
+User identified a missing agent: one whose job is to document the project itself, not the market.
+The trading pipeline agents (data → ml → research → strategy → synthesis) all serve the daily
+analysis workflow. The archive/historian agent runs on a completely separate cadence (weekly +
+milestone-triggered) and has a different audience: developers and informed readers, not traders.
+
+Key design decisions captured:
+- **Separate graph**: `ArchiveGraphState` + `build_archive_graph()` — no shared state with the
+  analysis graph. Different Prefect flow, different schedule, different `StateGraph`.
+- **4 responsibilities**: historical performance archive, development log (from git + WORKLOG),
+  technical explainers for deeply technical subsystems, glossary maintenance
+- **Glossary ownership**: the archive agent owns `docs/glossary.html`. On each run it checks for
+  new terms introduced since the last update and produces new entries with concrete examples.
+- **Frontend section**: a separate `/docs` section in Angular (`ArchiveModule`) served by a new
+  `GET /api/v1/archive/` NestJS router group — completely isolated from the trading dashboard.
+- **3 QuestDB tables added**: `project_milestones`, `technical_explainers`, `archive_reports`
+- **Model choice**: Sonnet by default, Opus override for the deep technical explainer pass.
+  `ARCHIVE_MODEL` and `ARCHIVE_DEEP_MODEL` env var aliases follow the same pattern as other nodes.
+
+Why not just a Prefect task? The archive job needs structured, typed output that can be reliably
+deserialized — `ArchiveReport` → `GlossaryEntry[]` + `Milestone[]` + `TechnicalExplainer[]`.
+LangGraph's `.with_structured_output()` gives that without regex fallbacks.
+
+---
+
 ## What Comes Next (pending user agent adjustments)
 
 1. User to finalize agent role definitions

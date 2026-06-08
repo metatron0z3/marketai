@@ -107,6 +107,8 @@ Prefect flow  ──────►  graph.invoke(state)
 
 ## Node Roles
 
+### Analysis Graph (nightly, 22:45 ET)
+
 | Node | Type | LLM calls/day | Structured output |
 |---|---|---|---|
 | `budget_check` | Code only | 0 | — |
@@ -118,7 +120,56 @@ Prefect flow  ──────►  graph.invoke(state)
 | `persist_node` | Code only | 0 | — |
 | `end_early` | Code only | 0 | — |
 
+### Archive Graph (separate flow, weekly or milestone-triggered)
+
+| Node | Type | LLM calls/run | Structured output |
+|---|---|---|---|
+| `archive_node` | LLM — full-tier | 3–5 | `ArchiveReport` |
+
+The archive graph runs independently — separate Prefect flow, separate LangGraph `StateGraph`,
+separate schedule. It does not share state with the analysis graph.
+
 All LLM nodes use `.with_structured_output(PydanticModel)` — no JSON parsing or regex fallbacks.
+
+---
+
+## Archive Agent — Role and Scope
+
+The `archive_node` is a standalone historical/education agent with a fundamentally different
+job from the trading pipeline: it documents the project itself, not the market.
+
+**Responsibilities**:
+
+1. **Historical performance archive** — once real options data is flowing, reads QuestDB
+   (`agent_trade_params`, `signal_catalog`, `conviction_scores`) to build a structured
+   performance record: which signals were flagged, what the model recommended, what happened.
+   This becomes the ground truth for backtesting and future model training.
+
+2. **Development log** — reads git log, commit messages, and the `WORKLOG.md` to produce
+   a human-readable, milestone-oriented account of how the project evolved. Surfaced as
+   a `/project/history` section in the Angular frontend.
+
+3. **Technical documentation** — generates detailed explanations of deeply technical subsystems
+   (ConvictionScorer formula, walk-forward CV design, LangGraph graph topology, SHAP
+   interpretation). Targeted at an informed reader who wants to understand not just what
+   the system does, but why each design choice was made.
+
+4. **Glossary maintenance** — owns `docs/glossary.html`. On each run, checks for new terms
+   introduced since the last glossary update (new model names, new QDB tables, new agent
+   nodes) and produces updated glossary entries with concrete examples.
+
+5. **Frontend section** — coordinates with the Angular frontend to maintain a separate
+   `/docs` section of the web UI: project history timeline, technical explainers, glossary,
+   live performance archive. The NestJS backend exposes a new `GET /api/v1/archive/`
+   router group that the Angular `ArchiveModule` consumes.
+
+**Cadence**: weekly (Sunday 00:00 ET) + triggered on milestone commits (new agent shipped,
+first real-data run, model retrain cycle complete).
+
+**Model**: Sonnet or Opus — quality matters more than cost here. ~3–5 LLM calls per run.
+
+**What it does NOT do**: it never touches `agent_trade_params` directly for strategy decisions,
+never calls the analysis graph, never modifies signal scoring logic.
 
 ---
 
