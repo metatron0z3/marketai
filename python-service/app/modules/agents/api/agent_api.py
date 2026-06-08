@@ -2,19 +2,22 @@
 Agent API — FastAPI router for the multi-agent analysis pipeline.
 
 Endpoints:
-  POST /api/v1/agents/analyze        → trigger multi_agent_analysis_flow
-  GET  /api/v1/agents/brief/{date}   → daily brief for that date
+  POST /api/v1/agents/analyze          → trigger multi_agent_analysis_flow via Prefect
+  POST /api/v1/agents/analyze/stream   → SSE — run graph inline, stream node updates
+  GET  /api/v1/agents/brief/{date}     → daily brief for that date
   GET  /api/v1/agents/trade-params/{date} → trade params for that date
-  GET  /api/v1/agents/run-log        → paginated agent_run_log
+  GET  /api/v1/agents/run-log          → paginated agent_run_log
 """
 from __future__ import annotations
 
+import json
 import os
 from datetime import date
-from typing import Optional
+from typing import AsyncGenerator, Optional
 
 import requests
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -113,6 +116,57 @@ def get_trade_params(
         LIMIT 50
     """)
     return {"date": target_date, "count": len(rows), "results": rows}
+
+
+@router.post("/analyze/stream")
+async def stream_analysis(body: AnalyzeRequest):
+    """
+    Run the analysis graph inline and stream node-by-node progress as SSE.
+
+    Angular connects to this endpoint during the live dashboard view.
+    Each event is a JSON object: {"node": "<name>", "update": {...}}.
+    The final event is {"done": true, "summary": {...}}.
+
+    This endpoint runs the graph in-process (no Prefect). For scheduled/nightly
+    runs use POST /analyze (Prefect deployment) instead.
+    """
+    async def event_stream() -> AsyncGenerator[str, None]:
+        from langchain_core.runnables import RunnableConfig
+        from app.modules.agents.graph.analysis_graph import build_analysis_graph, make_initial_state
+        from app.modules.llm.qdb_callback import QDBCostCallback
+
+        graph = build_analysis_graph()
+        state = make_initial_state(
+            target_date=body.target_date or str(date.today()),
+            symbols=body.symbols or ["SPY"],
+            model_aliases=body.model_aliases or {},
+            dry_run=body.dry_run,
+        )
+        config = RunnableConfig(
+            callbacks=[QDBCostCallback(agent_name="stream_endpoint")],
+        )
+
+        try:
+            async for chunk in graph.astream(state, config=config, stream_mode="updates"):
+                for node_name, node_update in chunk.items():
+                    payload = json.dumps(
+                        {"node": node_name, "update": node_update},
+                        default=str,
+                    )
+                    yield f"data: {payload}\n\n"
+
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/run-log")
