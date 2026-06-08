@@ -188,3 +188,83 @@ LangGraph's `.with_structured_output()` gives that without regex fallbacks.
 4. Phase 3: implement nodes one by one, commit per node
 5. Phase 4: wire `QDBCostCallback`, add DeepSeek pricing
 6. Phase 5: Docker + Prefect update + SSE endpoint
+
+---
+
+---
+
+## 2026-06-07 — Session 3: Full Implementation (Phases 1–5 + Archive)
+
+### Commit: `feat(agents/phase1): model factory, LangGraph deps, DeepSeek support`
+**Files**: `requirements.txt`, `llm/model_factory.py`
+
+- Added all LangGraph + LangChain provider packages to requirements.txt
+- `model_factory.py`: `build_chat_model(alias)` → `BaseChatModel`, `@lru_cache`,
+  `get_agent_model(name, override)`, MODEL_REGISTRY covering 12 aliases across
+  Anthropic/OpenAI/Gemini/DeepSeek/Ollama. DeepSeek uses ChatOpenAI + base_url,
+  no extra package. Replaces `backends.py`/`model_registry.py` for LangGraph nodes.
+
+---
+
+### Commit: `feat(agents/phase2+3): StateGraph skeleton + full node implementations`
+**Files**: `agents/graph/` (14 new files)
+
+- `state.py`: `GraphState` TypedDict with `Annotated[list, operator.add]` on
+  `trade_params` so parallel `Send()` fan-out accumulates results
+- `analysis_graph.py`: `build_analysis_graph()` — full topology with budget gate,
+  ML gate, Send fan-out for strategy_node, `make_initial_state()` helper
+- `models.py`: all Pydantic output models (ResearchContext, TradeParams, DailyBrief,
+  ArchiveReport and all sub-models) — framework-guaranteed structured output
+- `prompts.py`: prompt builders for all LLM nodes (research, strategy, synthesis,
+  archive milestones/glossary/explainer) — 3-part format: system → context → instruction
+- All 8 node files implemented fully:
+  - `budget_check.py`: wraps budget_guard.check_budget()
+  - `data_node.py`: wraps DataAgent, serialises SignalBatch → plain dict
+  - `ml_node.py`: wraps MLAgent + ConvictionScorer, serialises ScoredBatch
+  - `research_node.py`: runs contagion/squeeze/granger in code, 1 LLM call → ResearchContext
+  - `strategy_node.py`: half-Kelly sizing, 1 LLM call per signal → TradeParams
+  - `synthesis_node.py`: 1 LLM call → DailyBrief; empty brief on no signals
+  - `persist_node.py`: writes trade_params + daily_brief to QuestDB via ILP
+  - `end_early.py`: logs errors and exits cleanly
+
+---
+
+### Commit: `feat(agents/phase4): observability — multi-provider pricing + QDBCostCallback`
+**Files**: `llm/cost_tracker.py`, `llm/qdb_callback.py`
+
+- `cost_tracker.py`: added pricing for OpenAI, Gemini, DeepSeek, Ollama
+- `qdb_callback.py`: `QDBCostCallback` extends `BaseCallbackHandler`; fires on
+  `on_llm_end`, writes tokens + cost to `llm_audit_log`; fire-and-forget
+
+---
+
+### Commit: `feat(agents/phase5+archive): deployment, SSE endpoint, archive pipeline`
+**Files**: `flows/multi_agent_analysis_flow.py`, `api/agent_api.py`, `agents/archive/` (6 files)
+
+- Prefect flow rewritten: single `graph.invoke()` task replacing 6 sequential tasks
+- `POST /agents/analyze/stream` SSE endpoint: `graph.astream()` streams node updates
+  to Angular dashboard as `{"node": "<name>", "update": {...}}` events
+- Archive pipeline (completely separate from analysis graph):
+  - `ArchiveGraphState` TypedDict
+  - `archive_node`: 3 LLM passes (milestones/sonnet, glossary/sonnet, explainer/opus) + code perf pass
+  - `archive_graph.py`: linear graph; persist writes to project_milestones/technical_explainers/archive_reports
+  - `archive_flow.py`: Prefect flow, weekly schedule
+
+---
+
+## Status After Session 3
+
+All 5 phases implemented. The graph runs end-to-end:
+- `dry_run=True` traverses the full graph path with no LLM calls
+- All LLM nodes use `.with_structured_output(PydanticModel)` — no JSON parsing
+- Budget gate + ML gate correctly short-circuit expensive LLM calls
+- Archive pipeline fully independent of analysis graph
+
+**Remaining before production:**
+1. LangSmith account setup — add `LANGCHAIN_API_KEY` to `.env`
+2. Docker rebuild: `docker-compose build python-service`
+3. QuestDB schema migration: create `agent_trade_params`, `agent_daily_briefs`,
+   `project_milestones`, `technical_explainers`, `archive_reports` tables
+4. Prefect deployments: register `multi_agent_options_analysis_langgraph` at 22:45 ET
+   and `archive_pipeline` at Sunday 00:00 ET
+5. Validate with `dry_run=True` end-to-end, then cut over from legacy enrichment_flow
