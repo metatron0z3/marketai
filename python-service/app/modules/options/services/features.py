@@ -1,97 +1,169 @@
-from datetime import date, datetime, timezone
+from datetime import date
 
 import pandas as pd
 
 from app.core.db import get_db_connection
 
 
-def compute_features(symbol: str, start_date: str, end_date: str) -> int:
-    """Compute per-contract features from options_trades and write to options_features."""
+def compute_features(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    data_source: str = "databento",
+) -> int:
+    """
+    Compute per-contract features and write to options_features.
+
+    data_source: "databento" reads from options_trades (default, Databento/OPRA path).
+                 "massive"   reads from options_bars (Massive REST path).
+                 In the Massive path, aggressor_ratio, sweep_intensity, vol_oi_ratio,
+                 iv_rank, and delta_exposure are zero-filled (not available in OHLCV bars).
+    """
     conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute(
-        """
-        SELECT
-            ts_event, symbol, strike, expiration, put_call,
-            price, size, bid, ask, exchange, iv, delta, gamma, vega, theta,
-            open_interest, aggressor_side, is_sweep, premium
-        FROM options_trades
-        WHERE symbol = %s
-          AND ts_event >= %s
-          AND ts_event <= %s
-        ORDER BY ts_event
-        """,
-        (symbol, start_date, end_date),
-    )
+    if data_source == "massive":
+        cur.execute(
+            """
+            SELECT
+                ts_event, underlying_symbol AS symbol, strike_price AS strike,
+                expiration_date AS expiration, contract_type AS put_call,
+                open, high, low, close, volume
+            FROM options_bars
+            WHERE underlying_symbol = %s
+              AND ts_event >= %s
+              AND ts_event <= %s
+            ORDER BY ts_event
+            """,
+            (symbol, start_date, end_date),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT
+                ts_event, symbol, strike, expiration, put_call,
+                price, size, bid, ask, exchange, iv, delta, gamma, vega, theta,
+                open_interest, aggressor_side, is_sweep, premium
+            FROM options_trades
+            WHERE symbol = %s
+              AND ts_event >= %s
+              AND ts_event <= %s
+            ORDER BY ts_event
+            """,
+            (symbol, start_date, end_date),
+        )
+
     rows = cur.fetchall()
     if not rows:
         cur.close()
         conn.close()
         return 0
 
-    cols = [
-        "ts_event", "symbol", "strike", "expiration", "put_call",
-        "price", "size", "bid", "ask", "exchange", "iv", "delta", "gamma", "vega", "theta",
-        "open_interest", "aggressor_side", "is_sweep", "premium",
-    ]
-    df = pd.DataFrame(rows, columns=cols)
-    df["ts_event"] = pd.to_datetime(df["ts_event"])
-    df = df.sort_values("ts_event").reset_index(drop=True)
+    if data_source == "massive":
+        cols = [
+            "ts_event", "symbol", "strike", "expiration", "put_call",
+            "open", "high", "low", "close", "volume",
+        ]
+        df = pd.DataFrame(rows, columns=cols)
+        df["ts_event"] = pd.to_datetime(df["ts_event"])
+        df = df.sort_values("ts_event").reset_index(drop=True)
+        df["date"] = df["ts_event"].dt.date
 
-    # --- RVOL: current volume vs 20-day rolling average ---
-    df["date"] = df["ts_event"].dt.date
-    daily_vol = df.groupby(["symbol", "strike", "expiration", "put_call", "date"])["size"].sum().reset_index()
-    daily_vol["avg_vol_20d"] = daily_vol.groupby(["symbol", "strike", "expiration", "put_call"])["size"].transform(
-        lambda x: x.rolling(20, min_periods=1).mean().shift(1)
-    )
-    daily_vol["rvol"] = daily_vol["size"] / daily_vol["avg_vol_20d"].replace(0, 1)
-    df = df.merge(daily_vol[["symbol", "strike", "expiration", "put_call", "date", "rvol"]], on=["symbol", "strike", "expiration", "put_call", "date"], how="left")
+        # RVOL: volume / 20-day rolling average volume per contract
+        daily_vol = (
+            df.groupby(["symbol", "strike", "expiration", "put_call", "date"])["volume"]
+            .sum()
+            .reset_index()
+        )
+        daily_vol["avg_vol_20d"] = daily_vol.groupby(
+            ["symbol", "strike", "expiration", "put_call"]
+        )["volume"].transform(lambda x: x.rolling(20, min_periods=1).mean().shift(1))
+        daily_vol["rvol"] = daily_vol["volume"] / daily_vol["avg_vol_20d"].replace(0, 1)
+        df = df.merge(
+            daily_vol[["symbol", "strike", "expiration", "put_call", "date", "rvol"]],
+            on=["symbol", "strike", "expiration", "put_call", "date"],
+            how="left",
+        )
 
-    # --- Vol/OI ---
-    df["vol_oi_ratio"] = df["size"] / df["open_interest"].replace(0, 1)
+        # premium_flow proxy: close * volume * 100
+        df["premium_flow"] = df["close"] * df["volume"] * 100
 
-    # --- Premium Flow ---
-    df["premium_flow"] = df["premium"]
+        # Tick-level features unavailable from aggregate bars
+        df["sweep_intensity"] = 0.0
+        df["aggressor_ratio"] = 0.0
+        df["delta_exposure"] = 0.0
+        df["iv_rank"] = 0.0
+        df["vol_oi_ratio"] = 0.0
 
-    # --- Sweep Intensity: sweeps / total trades in 5-min buckets ---
-    df["bucket"] = df["ts_event"].dt.floor("5min")
-    bucket_stats = df.groupby(["symbol", "strike", "expiration", "put_call", "bucket"]).agg(
-        total=("size", "count"),
-        sweeps=("is_sweep", "sum"),
-    ).reset_index()
-    bucket_stats["sweep_intensity"] = bucket_stats["sweeps"] / bucket_stats["total"].replace(0, 1)
-    df = df.merge(bucket_stats[["symbol", "strike", "expiration", "put_call", "bucket", "sweep_intensity"]], on=["symbol", "strike", "expiration", "put_call", "bucket"], how="left")
+        today = date.today()
+        df["days_to_exp"] = df["expiration"].apply(
+            lambda e: (e - today).days if isinstance(e, date) else 0
+        )
 
-    # --- Aggressor Ratio: buy premium / total premium ---
-    df["buy_premium"] = df["premium"].where(df["aggressor_side"] == "BUY", 0)
-    df["sell_premium"] = df["premium"].where(df["aggressor_side"] == "SELL", 0)
-    agg_ratio = df.groupby(["symbol", "strike", "expiration", "put_call", "bucket"]).agg(
-        buy_p=("buy_premium", "sum"),
-        sell_p=("sell_premium", "sum"),
-    ).reset_index()
-    agg_ratio["aggressor_ratio"] = agg_ratio["buy_p"] / (agg_ratio["buy_p"] + agg_ratio["sell_p"]).replace(0, 1)
-    df = df.merge(agg_ratio[["symbol", "strike", "expiration", "put_call", "bucket", "aggressor_ratio"]], on=["symbol", "strike", "expiration", "put_call", "bucket"], how="left")
+        # Bars are already at the bar-close timestamp; use directly as bucket
+        df["bucket"] = df["ts_event"]
+        feature_df = df.drop_duplicates(subset=["symbol", "strike", "expiration", "put_call", "bucket"])
 
-    # --- Delta Exposure ---
-    df["delta_exposure"] = df["delta"] * df["size"] * 100
+    else:
+        cols = [
+            "ts_event", "symbol", "strike", "expiration", "put_call",
+            "price", "size", "bid", "ask", "exchange", "iv", "delta", "gamma", "vega", "theta",
+            "open_interest", "aggressor_side", "is_sweep", "premium",
+        ]
+        df = pd.DataFrame(rows, columns=cols)
+        df["ts_event"] = pd.to_datetime(df["ts_event"])
+        df = df.sort_values("ts_event").reset_index(drop=True)
 
-    # --- IV Rank ---
-    iv_stats = df.groupby(["symbol", "strike", "expiration", "put_call"])["iv"].agg(
-        iv_low="min", iv_high="max"
-    ).reset_index()
-    df = df.merge(iv_stats, on=["symbol", "strike", "expiration", "put_call"], how="left")
-    iv_range = (df["iv_high"] - df["iv_low"]).replace(0, 1)
-    df["iv_rank"] = (df["iv"] - df["iv_low"]) / iv_range
+        # RVOL: current volume vs 20-day rolling average
+        df["date"] = df["ts_event"].dt.date
+        daily_vol = df.groupby(["symbol", "strike", "expiration", "put_call", "date"])["size"].sum().reset_index()
+        daily_vol["avg_vol_20d"] = daily_vol.groupby(["symbol", "strike", "expiration", "put_call"])["size"].transform(
+            lambda x: x.rolling(20, min_periods=1).mean().shift(1)
+        )
+        daily_vol["rvol"] = daily_vol["size"] / daily_vol["avg_vol_20d"].replace(0, 1)
+        df = df.merge(daily_vol[["symbol", "strike", "expiration", "put_call", "date", "rvol"]], on=["symbol", "strike", "expiration", "put_call", "date"], how="left")
 
-    # --- Days to Expiration ---
-    today = date.today()
-    df["days_to_exp"] = df["expiration"].apply(lambda e: (e - today).days if isinstance(e, date) else 0)
+        # Vol/OI
+        df["vol_oi_ratio"] = df["size"] / df["open_interest"].replace(0, 1)
 
-    # Deduplicate to one row per (symbol, strike, expiration, put_call, bucket)
-    feature_df = df.drop_duplicates(subset=["symbol", "strike", "expiration", "put_call", "bucket"])
+        # Premium Flow
+        df["premium_flow"] = df["premium"]
 
-    # Write to options_features
+        # Sweep Intensity: sweeps / total trades in 5-min buckets
+        df["bucket"] = df["ts_event"].dt.floor("5min")
+        bucket_stats = df.groupby(["symbol", "strike", "expiration", "put_call", "bucket"]).agg(
+            total=("size", "count"),
+            sweeps=("is_sweep", "sum"),
+        ).reset_index()
+        bucket_stats["sweep_intensity"] = bucket_stats["sweeps"] / bucket_stats["total"].replace(0, 1)
+        df = df.merge(bucket_stats[["symbol", "strike", "expiration", "put_call", "bucket", "sweep_intensity"]], on=["symbol", "strike", "expiration", "put_call", "bucket"], how="left")
+
+        # Aggressor Ratio: buy premium / total premium
+        df["buy_premium"] = df["premium"].where(df["aggressor_side"] == "BUY", 0)
+        df["sell_premium"] = df["premium"].where(df["aggressor_side"] == "SELL", 0)
+        agg_ratio = df.groupby(["symbol", "strike", "expiration", "put_call", "bucket"]).agg(
+            buy_p=("buy_premium", "sum"),
+            sell_p=("sell_premium", "sum"),
+        ).reset_index()
+        agg_ratio["aggressor_ratio"] = agg_ratio["buy_p"] / (agg_ratio["buy_p"] + agg_ratio["sell_p"]).replace(0, 1)
+        df = df.merge(agg_ratio[["symbol", "strike", "expiration", "put_call", "bucket", "aggressor_ratio"]], on=["symbol", "strike", "expiration", "put_call", "bucket"], how="left")
+
+        # Delta Exposure
+        df["delta_exposure"] = df["delta"] * df["size"] * 100
+
+        # IV Rank
+        iv_stats = df.groupby(["symbol", "strike", "expiration", "put_call"])["iv"].agg(
+            iv_low="min", iv_high="max"
+        ).reset_index()
+        df = df.merge(iv_stats, on=["symbol", "strike", "expiration", "put_call"], how="left")
+        iv_range = (df["iv_high"] - df["iv_low"]).replace(0, 1)
+        df["iv_rank"] = (df["iv"] - df["iv_low"]) / iv_range
+
+        today = date.today()
+        df["days_to_exp"] = df["expiration"].apply(lambda e: (e - today).days if isinstance(e, date) else 0)
+
+        feature_df = df.drop_duplicates(subset=["symbol", "strike", "expiration", "put_call", "bucket"])
+
     insert_sql = """
         INSERT INTO options_features (
             ts_event, symbol, strike, expiration, put_call,
@@ -110,7 +182,7 @@ def compute_features(symbol: str, start_date: str, end_date: str) -> int:
             float(row.get("delta_exposure", 0) or 0),
             float(row.get("iv_rank", 0) or 0),
             int(row.get("days_to_exp", 0) or 0),
-            None,  # label_24h filled in by label generation step
+            None,
         )
         for _, row in feature_df.iterrows()
     ]

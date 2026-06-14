@@ -29,12 +29,16 @@ PYTHON_SERVICE_URL=http://python-service:8000
 ```env
 QUESTDB_HOST=questdb
 QUESTDB_PORT=9000
+MASSIVE_API_KEY=your_massive_api_key_here
+MASSIVE_BASE_URL=https://api.massive.com
 ```
 
 ### Variable Descriptions
 
 - **QUESTDB_HOST**: QuestDB hostname
 - **QUESTDB_PORT**: HTTP API port (not PostgreSQL 8812)
+- **MASSIVE_API_KEY**: API key for Massive REST data feed. Required to use `POST /api/v1/options/ingest/massive`. Never log or commit this value.
+- **MASSIVE_BASE_URL**: Base URL for the Massive API (default: `https://api.massive.com`). Override only in testing or when pointing at a proxy.
 
 ## Local Development
 
